@@ -1,5 +1,5 @@
 count	name
-6	B.Belichick
-4	C.Noll
+6	B.Lohman
+4	J.Miller
 3	B.Walsh
 3	J.Gibbs
