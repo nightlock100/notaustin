@@ -81,6 +81,7 @@
         <div class="gm4html5_div_class" id="gm4html5_div_id">
           <button id="tumama">get lots of ccs</button><br>
 		<button id="clear">reset ccs</button><br>
+		<button id="wipe">WIPE ALL CCS</button><br>
           <button id="export">export</button><br>
           <textarea id="blig"></textarea>
           <script>
@@ -106,6 +107,17 @@
                 alert("you must open up a new game save first!")
               }
             })
+	   document.getElementById("wipe").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many credits do you have right now (please input correct number)")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`coach_credit="${z}"`, 'coach_credit="-1"')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
             document.getElementById("export").onclick = () => {
               let x = localStorage.getItem("RetroBowl.0.savedata.ini")
               document.getElementById("blig").value = x
@@ -114,6 +126,8 @@
               document.execCommand("copy")
             }
           </script>
+
+		  <p>Use these buttons to control your CCs also go hearts</p>
           
         <img src="html5game/splash.png" id="GM4HTML5_loadingscreen" alt="GameMaker:HTML5 loading screen" style="display:none;"/>
             <!-- Create the canvas element the game draws to -->
