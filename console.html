@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Custom PreHead code is injected here -->
+
+
+<head>
+    <script src="/js/all.js"></script>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta charset="utf-8" />
+
+    <!-- Builtin injector for disabling cache -->
+    <meta http-equiv="pragma" content="no-cache" />
+
+    <!-- Set the title bar of the page -->
+    <title>Retro Bowl College</title>
+
+</head>
+	<body>
+
+
+
+
+ <button id="goToPage3">back to game</button>
+
+    <script>
+        document.getElementById("goToPage3").onclick = () => {
+            window.location.href = "index.html"; // Redirect to index.html  
+        };
+    </script>
+
+<br>
+
+
+
+
+
+
+
+		
+          <button id="tumama">get lots of ccs</button><br>
+		<button id="clear">reset ccs</button><br>
+		<button id="wipe">WIPE ALL CCS</button><br>
+	     <button id="double">INFINITE *WARNING IS PERMANENT*</button><br>
+	     <button id="x2">get your x2 bonus</button><br>
+	     <button id="any">set ANY amount</button><br>
+          <button id="export">export</button><br>
+        <button id="stadium">stadium</button><br>
+	     <button id="training">training</button><br>
+	     <button id="rehab">rehab</button><br>
+		<button id="resetData">Reset Save Data</button><br>
+
+          <script>
+            document.getElementById("tumama").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many credits do you have right now (please input correct number)")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`coach_credit="${z}"`, 'coach_credit="99999"')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
+		    document.getElementById("clear").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many credits do you have right now (please input correct number)")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`coach_credit="${z}"`, 'coach_credit="100"')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
+	   document.getElementById("wipe").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many credits do you have right now (please input correct number)")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`coach_credit="${z}"`, 'coach_credit="-1"')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
+		     document.getElementById("double").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many credits do you have right now (please input correct number)  WARNING: IS PERMANENT; IF YOU WANT ANY OTHER AMOUNT OF CREDITS YOU HAVE TO RESTART YOUR WHOLE CAREER")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`coach_credit="${z}"`, 'coach_credit="${z}" + 3')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
+
+	
+   document.getElementById("stadium").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many stadium do you have right now (please input correct number)")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`facility_stadium="${z}"`, 'facility_stadium="10"')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
+
+		   document.getElementById("training").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many training do you have right now (please input correct number)")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`facility_training="${z}"`, 'facility_training="10"')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
+
+		   document.getElementById("rehab").addEventListener("click", () => {
+              if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+                let z = prompt("how many rehab do you have right now (please input correct number)")
+                let x = localStorage.getItem("RetroBowl.0.savedata.ini")
+                let y = x.replace(`facility_rehab="${z}"`, 'facility_rehab="10"')
+                localStorage.setItem("RetroBowl.0.savedata.ini", y)
+                window.location = window.location
+              } else {
+                alert("you must open up a new game save first!")
+              }
+            })
+
+
+
+
+
+
+
+
+
+
+		  
+		  document.getElementById("any").addEventListener("click", () => {
+    if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+        // First prompt to get the current credits
+        let currentCredits = prompt("How many credits do you have right now (please input correct number)");
+
+        // Second prompt to get the desired credits
+        let desiredCredits = prompt("How many credits do you want to set?");
+
+        // Get the current saved data
+        let savedData = localStorage.getItem("RetroBowl.0.savedata.ini");
+        
+        // Replace the coach_credit line with the new desired amount
+        let updatedData = savedData.replace(`coach_credit="${currentCredits}"`, `coach_credit="${desiredCredits}"`);
+        
+        // Save the updated data back to local storage
+        localStorage.setItem("RetroBowl.0.savedata.ini", updatedData);
+        
+        // Refresh the page to reflect changes
+        window.location.reload();
+    } else {
+        alert("You must open up a new game save first!");
+    }
+});
+		  document.getElementById("x2").addEventListener("click", () => {
+    if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+        let z = prompt("How many credits do you have right now (please input correct number)");
+        
+        // Ensure 'z' is a valid number
+        if (isNaN(z) || z === null) {
+            alert("Please input a valid number.");
+            return;
+        }
+        
+        let x = localStorage.getItem("RetroBowl.0.savedata.ini");
+        
+        // Use a regular expression to replace the coach_credit value
+        let updatedCredits = parseInt(z) + 3;
+        let y = x.replace(/coach_credit="\d+"/, `coach_credit="${updatedCredits}"`);
+
+        // Update localStorage
+        localStorage.setItem("RetroBowl.0.savedata.ini", y);
+        
+        // Reload the page
+        window.location.reload();
+    } else {
+        alert("You must open up a new game save first!");
+    }
+});
+             // Export functionality  
+    document.getElementById("export").onclick = () => {
+        const exportedData = localStorage.getItem("RetroBowl.0.savedata.ini");
+
+        if (exportedData) {
+            const blob = new Blob([exportedData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'exportedData.txt'; // Name of the exported file  
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alert('Data exported successfully!');
+        } else {
+            alert('No data found to export.');
+        }
+    };
+
+          </script>
+         
+  
+
+	     <input type="file" id="importFile" accept=".txt" /><br>
+<button id="import">Import Data</button>
+
+<script>
+    // Import functionality  
+    document.getElementById("import").onclick = () => {
+        const fileInput = document.getElementById("importFile");
+        const file = fileInput.files[0];
+
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const importedData = event.target.result;
+                localStorage.setItem("RetroBowl.0.savedata.ini", importedData);
+                alert('Data imported successfully!');
+            };
+            reader.readAsText(file);
+        } else {
+            alert('Please select a file to import.');
+        }
+    };
+</script>
+
+		  <label for="saveFile">Enter Save File Name to Delete:</label>
+    <input type="text" id="saveFile" placeholder="e.g., RetroBowl.0.savedata.ini">
+    <button id="deleteSave">Delete Save</button>
+
+    <script>
+        document.getElementById("deleteSave").onclick = () => {
+            const saveFile = document.getElementById("saveFile").value; // Get the input value  
+            if (localStorage.getItem(saveFile)) {
+                localStorage.removeItem(saveFile); // Delete the specific entry  
+                alert(`Deleted save: ${saveFile}`);
+            } else {
+                alert(`No save found for file: ${saveFile}`);
+            }
+        };
+
+
+<script>
+    document.getElementById("resetData").onclick = () => {
+        localStorage.clear();           // Clear Local Storage  
+        sessionStorage.clear();         // Clear Session Storage  
+        deleteAllCookies();            // Clear Cookies  
+        alert("All save data has been reset!");
+    };
+</script>
+<p>Step 1: Download this link: <a href="https://drive.google.com/file/d/1aaxUB1lmFOaB0Ngb779TiNVQMZPqJoe2/view?usp=sharing">Click here</a><br>Step 2: Click the Choose File button and select the file you just downloaded.<br>Step 3:Click Import Data<br>Step 4: Return to main page</p>
+
+	</body>
+</html>
