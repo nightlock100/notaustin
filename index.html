@@ -218,7 +218,10 @@
     }
 });
     </script><br>
-<button id="fans">any fans</button><br><script>
+<button id="fans">any fans</button><br>
+	    <button id="year">any year</button><br>
+	    	    <button id="week">any week</button><br>
+	    <script>
 
 	       document.getElementById("fans").addEventListener("click", () => {
     if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
@@ -243,8 +246,61 @@
         alert("You must open up a new game save first!");
     }
 });
-    </script><br>
-<button id="fans">any fans</button><br>
+
+
+
+
+		     document.getElementById("year").addEventListener("click", () => {
+    if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+        // First prompt to get the current credits
+        let currentCredits = prompt("How many fans do you have right now (please input correct number)");
+
+        // Second prompt to get the desired credits
+        let desiredCredits = prompt("How many fans do you want to set?");
+
+        // Get the current saved data
+        let savedData = localStorage.getItem("RetroBowl.0.savedata.ini");
+        
+        // Replace the coach_credit line with the new desired amount
+        let updatedData = savedData.replace(`year="${currentCredits}"`, `year"${desiredCredits}"`);
+        
+        // Save the updated data back to local storage
+        localStorage.setItem("RetroBowl.0.savedata.ini", updatedData);
+        
+        // Refresh the page to reflect changes
+        window.location.reload();
+    } else {
+        alert("You must open up a new game save first!");
+    }
+});
+
+
+
+
+		     document.getElementById("week").addEventListener("click", () => {
+    if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
+        // First prompt to get the current credits
+        let currentCredits = prompt("How many fans do you have right now (please input correct number)");
+
+        // Second prompt to get the desired credits
+        let desiredCredits = prompt("How many fans do you want to set?");
+
+        // Get the current saved data
+        let savedData = localStorage.getItem("RetroBowl.0.savedata.ini");
+        
+        // Replace the coach_credit line with the new desired amount
+        let updatedData = savedData.replace(`week="${currentCredits}"`, `week"${desiredCredits}"`);
+        
+        // Save the updated data back to local storage
+        localStorage.setItem("RetroBowl.0.savedata.ini", updatedData);
+        
+        // Refresh the page to reflect changes
+        window.location.reload();
+    } else {
+        alert("You must open up a new game save first!");
+    }
+});
+    </script>
 
 	    	
       
