@@ -35,30 +35,17 @@
 
 
 
- <button id="goToPage3">back to game</button>
-
-    <script>
-        document.getElementById("goToPage3").onclick = () => {
-            window.location.href = "index.html"; // Redirect to index.html  
-        };
-    </script>
-
-<br>
-
-
-
-
-
-
-
-		
-      
+ <button id="tumama">get lots of ccs</button><br>
+		<button id="clear">reset ccs</button><br>
+		<button id="wipe">WIPE ALL CCS</button><br>
+	     <button id="double">INFINITE *WARNING IS PERMANENT*</button><br>
 	     <button id="x2">get your x2 bonus</button><br>
 	     <button id="any">set ANY amount</button><br>
-		<button id="stadium">stadium</button><br>
+          <button id="export">export</button><br>
+        <button id="stadium">stadium</button><br>
 	     <button id="training">training</button><br>
 	     <button id="rehab">rehab</button><br>
-		
+		<button id="resetData">Reset Save Data</button><br>
 
           <script>
             document.getElementById("tumama").addEventListener("click", () => {
@@ -226,9 +213,6 @@
   
 
 	     <input type="file" id="importFile" accept=".txt" /><br>
-		
-          <button id="export">export</button><br>
-
 <button id="import">Import Data</button>
 
 <script>
@@ -267,7 +251,7 @@
         };
 
 
-
+<script>
     document.getElementById("resetData").onclick = () => {
         localStorage.clear();           // Clear Local Storage  
         sessionStorage.clear();         // Clear Session Storage  
@@ -275,7 +259,5 @@
         alert("All save data has been reset!");
     };
 </script>
-<p>Step 1: Download this link: <a href="https://drive.google.com/file/d/1aaxUB1lmFOaB0Ngb779TiNVQMZPqJoe2/view?usp=sharing">Click here</a><br>Step 2: Click the Choose File button and select the file you just downloaded.<br>Step 3:Click Import Data<br>Step 4: Return to main page</p>
-
 	</body>
 </html>
