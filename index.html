@@ -235,16 +235,16 @@
 	       document.getElementById("fans").addEventListener("click", () => {
     if (localStorage.getItem("RetroBowl.0.savedata.ini")) {
         // First prompt to get the current credits
-        let currentCredits = prompt("How many fans do you have right now (please input correct number)");
+        let currentFans = prompt("How many fans do you have right now (please input correct number)");
 
         // Second prompt to get the desired credits
-        let desiredCredits = prompt("How many fans do you want to set?");
+        let desiredFans = prompt("How many fans do you want to set?");
 
         // Get the current saved data
         let savedData = localStorage.getItem("RetroBowl.0.savedata.ini");
         
         // Replace the coach_credit line with the new desired amount
-        let updatedData = savedData.replace(`fans="${currentCredits}"`, `fans="${desiredCredits}"`);
+        let updatedData = savedData.replace(`fans="${currentFans}"`, `fans="${desiredFans}"`);
         
         // Save the updated data back to local storage
         localStorage.setItem("RetroBowl.0.savedata.ini", updatedData);
