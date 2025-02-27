@@ -29,7 +29,7 @@ tag	name	type	price	owned	life
 28	House	2	250	0	100
 29	Log Cabin	2	300	0	100
 30	Cafe	2	350	0	100
-31	Country House	2	400	0	100
+31	diddy home	2	400	0	100
 32	Holiday Home	2	450	0	100
 33	Ski Chalet	2	500	0	100
 34	Mansion	2	550	0	100
