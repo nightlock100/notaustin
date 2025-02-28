@@ -19,19 +19,27 @@
             display: flex;
             flex-direction: column; /* Stack elements vertically */
             height: 100vh;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+            transition: padding-top 0.5s ease; /* Transition for sliding navbar */
         }
 
         /* Header Styling */
         header {
             background-color: #80b3f6;
             padding: 10px 20px;
-            position: relative;
-            z-index: 10; /* Ensure header stays on top */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 10;
             border-radius: 20px;
             border-style: solid;
-            border-color:black;
+            border-color: black;
             border-top-left-radius: 0px;
             border-top-right-radius: 0px;
+            height: 50px;
+            transform: translateY(-100%); /* Initially hide the navbar off-screen */
+            transition: transform 0.5s ease; /* Smooth transition */
         }
 
         /* Navbar container */
@@ -39,6 +47,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            height: 100%;
         }
 
         /* Main heading */
@@ -76,8 +85,8 @@
         /* Game canvas styling */
         canvas {
             width: 100%;
-            height: 100%;
-            margin-top: 20px; /* Add space below the header */
+            height: 100%; /* Take up the full height of the screen */
+            margin-top: 0; /* Remove any space above the canvas */
             display: block; /* Ensure canvas is displayed as block level element */
         }
 
@@ -102,11 +111,6 @@
                 width: 100%;
                 padding: 15px 0;
             }
-        }
-
-        /* Fullscreen style to hide navbar */
-        .fullscreen .navbar {
-            display: none;
         }
     </style>
 
@@ -170,74 +174,20 @@
     <script src="js/ubg235_client_v1_1.js"></script>
 
     <script>
-        function navigateToPage() {
-            window.location.href = "https://nightlock100.github.io/notaustin/console.html"; // Replace with your desired URL
-        }
-
-        // Function to handle fullscreen toggle and navbar visibility
-        function toggleFullscreen() {
-            // Check if already in fullscreen mode
-            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
-                // Request fullscreen mode
-                var elem = document.documentElement;
-                if (elem.requestFullscreen) {
-                    elem.requestFullscreen();
-                } else if (elem.webkitRequestFullscreen) {
-                    elem.webkitRequestFullscreen();
-                } else if (elem.mozRequestFullScreen) {
-                    elem.mozRequestFullScreen();
-                } else if (elem.msRequestFullscreen) {
-                    elem.msRequestFullscreen();
+        // Handle Enter key press to toggle navbar visibility
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Enter") {
+                // Toggle the navbar sliding in and out by changing its transform property
+                const header = document.querySelector('header');
+                if (header.style.transform === 'translateY(0px)') {
+                    header.style.transform = 'translateY(-100%)'; // Hide the navbar
+                    document.body.style.paddingTop = '0'; // Adjust body padding to compensate
+                } else {
+                    header.style.transform = 'translateY(0px)'; // Show the navbar
+                    document.body.style.paddingTop = '50px'; // Adjust body padding when navbar is visible
                 }
-            } else {
-                // Exit fullscreen
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.mozCancelFullScreen) {
-                    document.mozCancelFullScreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
-            }
-        }
-
-        // Event listener to toggle fullscreen and hide navbar when fullscreen
-        document.addEventListener('fullscreenchange', function() {
-            if (document.fullscreenElement) {
-                document.body.classList.add('fullscreen');
-            } else {
-                document.body.classList.remove('fullscreen');
-            }
-        });
-
-        document.addEventListener('webkitfullscreenchange', function() {
-            if (document.webkitFullscreenElement) {
-                document.body.classList.add('fullscreen');
-            } else {
-                document.body.classList.remove('fullscreen');
-            }
-        });
-
-        document.addEventListener('mozfullscreenchange', function() {
-            if (document.mozFullScreenElement) {
-                document.body.classList.add('fullscreen');
-            } else {
-                document.body.classList.remove('fullscreen');
-            }
-        });
-
-        document.addEventListener('msfullscreenchange', function() {
-            if (document.msFullscreenElement) {
-                document.body.classList.add('fullscreen');
-            } else {
-                document.body.classList.remove('fullscreen');
             }
         });
     </script>
-
-    <!-- Add button to toggle fullscreen -->
-    <button onclick="toggleFullscreen()">Toggle Fullscreen</button>
 </body>
 </html>
