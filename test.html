@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website with Navigation</title>
+   <style>
+     /* Resetting default styles */
+body, h1, ul, li, a {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    list-style-type: none;
+    text-decoration: none;
+}
+
+/* Body and general layout */
+body {
+    background-color: #f4f4f4;
+    margin: 0;
+}
+
+/* Styling the header and navigation bar */
+header {
+    background-color: #333;
+    padding: 10px 20px;
+}
+
+/* Navbar container */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Main heading */
+.main-heading {
+    font-size: 2rem;
+    color: #f9c74f;
+}
+
+/* Navigation links styling */
+.nav-links {
+    display: flex;
+}
+
+.nav-links li {
+    margin: 0 15px;
+}
+
+/* Link styles */
+.nav-links a {
+    color: white;
+    font-size: 1rem;
+    padding: 10px 15px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Hover effect for the navigation links */
+.nav-links a:hover {
+    background-color: #f9c74f;
+    color: #333;
+}
+
+/* Make the navigation bar responsive */
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .nav-links {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .nav-links li {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .nav-links a {
+        width: 100%;
+        padding: 15px 0;
+    }
+}
+
+   </style>
+</head>
+<body>
+
+    <header>
+        <nav class="navbar">
+            <h1 class="main-heading">My Awesome Website</h1>
+            <ul class="nav-links">
+                <li><a href="#">Home</a></li>
+                <li><a href="#">About</a></li>
+                <li><a href="#">Services</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+</body>
+</html>
