@@ -152,7 +152,6 @@
     <!-- Importing a retro pixelated font -->
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
-
 <body>
     <h1>Console</h1>
 
@@ -188,29 +187,146 @@
     </div>
 
     <script>
-        // Navigate to a new page
-        function navigateToPage() {
-            window.location.href = "https://nightlock100.github.io/notaustin/index.html"; // Replace with your desired URL
+        // Function to load .ini file content (from localStorage or file)
+        function loadIniFile(callback) {
+            // Check if the file is in localStorage
+            const data = localStorage.getItem("RetroBowl.0.savedata.ini");
+            if (data) {
+                callback(data);
+            } else {
+                alert("No save data found.");
+            }
         }
 
-        // Handle the import functionality
-        document.getElementById("import").onclick = () => {
-            const fileInput = document.getElementById("importFile");
-            const file = fileInput.files[0];
+        // Function to save modified .ini data
+        function saveIniFile(data) {
+            localStorage.setItem("RetroBowl.0.savedata.ini", data); // Save modified data to localStorage
+        }
 
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const importedData = event.target.result;
-                    localStorage.setItem("RetroBowl.0.savedata.ini", importedData);
-                    alert('Data imported successfully!');
-                };
-                reader.readAsText(file);
-            } else {
-                alert('Please select a file to import.');
+        // Button functionalities
+        document.getElementById("tumama").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=99999");
+                saveIniFile(data);
+                alert("Coach credit set to 99999");
+            });
+        });
+
+        document.getElementById("clear").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=0");
+                saveIniFile(data);
+                alert("Coach credit reset to 0");
+            });
+        });
+
+        document.getElementById("wipe").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=-1");
+                saveIniFile(data);
+                alert("Coach credit set to -1");
+            });
+        });
+
+        document.getElementById("double").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=NaN");
+                saveIniFile(data);
+                alert("Coach credit set to NaN");
+            });
+        });
+
+        document.getElementById("x2").addEventListener("click", function() {
+            loadIniFile((data) => {
+                const match = data.match(/coach_credit=(\d+)/);
+                if (match) {
+                    const currentValue = parseInt(match[1]);
+                    const newValue = currentValue + 3;
+                    data = data.replace(/coach_credit=[^\n]*/g, `coach_credit=${newValue}`);
+                    saveIniFile(data);
+                    alert("Added 3 to coach credit");
+                }
+            });
+        });
+
+        document.getElementById("any").addEventListener("click", function() {
+            const amount = prompt("Enter the amount of coach credit:");
+            if (amount) {
+                loadIniFile((data) => {
+                    data = data.replace(/coach_credit=[^\n]*/g, `coach_credit=${amount}`);
+                    saveIniFile(data);
+                    alert(`Coach credit set to ${amount}`);
+                });
             }
-        };
+        });
+
+        document.getElementById("export").addEventListener("click", function() {
+            loadIniFile((data) => {
+                const blob = new Blob([data], { type: 'text/plain' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'rbSave.txt';
+                link.click();
+            });
+        });
+
+        document.getElementById("stadium").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/stadium=[^\n]*/g, "stadium=10");
+                saveIniFile(data);
+                alert("Stadium set to 10");
+            });
+        });
+
+        document.getElementById("training").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/training=[^\n]*/g, "training=10");
+                saveIniFile(data);
+                alert("Training set to 10");
+            });
+        });
+
+        document.getElementById("rehab").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/rehab=[^\n]*/g, "rehab=10");
+                saveIniFile(data);
+                alert("Rehab set to 10");
+            });
+        });
+
+        document.getElementById("qb").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/fr_mode=[^\n]*/g, "fr_mode=0");
+                data = data.replace(/qb_mode=[^\n]*/g, "qb_mode=4");
+                saveIniFile(data);
+                alert("QB Mode enabled");
+            });
+        });
+
+        document.getElementById("fr").addEventListener("click", function() {
+            loadIniFile((data) => {
+                data = data.replace(/fr_mode=[^\n]*/g, "fr_mode=1");
+                data = data.replace(/qb_mode=[^\n]*/g, "qb_mode=0");
+                saveIniFile(data);
+                alert("FR Mode enabled");
+            });
+        });
+
+        document.getElementById("deleteSave").addEventListener("click", function() {
+            const saveFile = document.getElementById('saveFile').value;
+            if (!saveFile) {
+                alert('Please enter a save file name.');
+                return;
+            }
+            localStorage.removeItem(saveFile); // Delete the saved data
+            alert(`${saveFile} deleted.`);
+        });
+
+        function navigateToPage() {
+            window.location.href = '/'; // Replace with your game page URL
+        }
     </script>
 </body>
+
 
 </html>
