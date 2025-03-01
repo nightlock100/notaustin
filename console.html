@@ -11,73 +11,96 @@
     <link rel="icon" href="download__12_-removebg-preview.png" type="image/x-icon" />
     <style>
         body {
-            background-color: lightpink;
-            border-style: rigid;
-            border-width: 10px;
-            border-radius: 50px;
-            border-color: black;
+            background-color: #4A90E2; /* Retro Bowl's blue color */
+            border-style: solid;
+            border-width: 5px;
+            border-radius: 15px;
+            border-color: #ffffff;
+            font-family: 'Press Start 2P', cursive; /* Retro pixelated font */
             display: flex;
             justify-content: center;
             align-items: center;
             flex-direction: column;
             min-height: 100vh;
             margin: 0;
+            color: #ffffff;
+        }
+
+        /* Retro-style Title */
+        h1 {
+            font-size: 48px;
+            text-transform: uppercase;
+            text-align: center;
+            letter-spacing: 5px;
+            color: #ffffff;
+            margin-bottom: 40px; /* Increased margin for spacing */
         }
 
         .button-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 30px; /* Increased spacing between buttons */
             width: 100%;
             max-width: 600px;
             margin-top: 20px;
         }
 
         button {
-            background-color: black;
-            color: white;
-            border: 2px solid #333;
-            padding: 10px 20px;
-            font-size: 16px;
+            background-color: #007aff; /* Retro Bowl blue background */
+            color: #ffffff; /* White text */
+            border: 4px solid #ffffff; /* Thicker and more pixelated white border */
+            padding: 16px 30px; /* Slightly increased padding for buttons */
+            font-size: 18px;
             text-align: center;
             cursor: pointer;
             border-radius: 8px;
-            transition: background-color 0.3s ease, transform 0.2s ease;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
             font-weight: bold;
+            font-family: 'Press Start 2P', cursive;
+            line-height: 1.5; /* Increased line-height for vertical text spacing */
+            width: 100%; /* Make buttons full width */
+            box-sizing: border-box; /* Ensure padding doesn't affect width */
         }
 
         button:hover {
-            background-color: #444;
+            background-color: #005cbf; /* Darker blue on hover */
             transform: scale(1.05);
         }
 
         button:active {
-            background-color: #666;
-            transform: scale(1);
+            background-color: #003d7a; /* Even darker blue on click */
+            transform: scale(0.95); /* Press-down effect: slightly smaller */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Subtle drop shadow for the "press" effect */
         }
 
         /* Style for custom "Choose File" button */
         #customFileInput {
-            background-color: black;
-            color: white;
-            border: 2px solid #333;
-            padding: 10px 20px;
-            font-size: 16px;
+            background-color: #007aff; /* Retro Bowl blue background */
+            color: #ffffff; /* White text */
+            border: 4px solid #ffffff; /* Thicker and more pixelated white border */
+            padding: 16px 30px; /* Slightly increased padding for button */
+            font-size: 18px;
             font-weight: bold;
             border-radius: 8px;
             cursor: pointer;
             display: inline-block;
-            transition: background-color 0.3s ease, transform 0.2s ease;
+            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
+            font-family: 'Press Start 2P', cursive;
+            line-height: 1.5; /* Increased line-height for vertical text spacing */
+            width: 100%; /* Make the button full width */
+            box-sizing: border-box; /* Ensure padding doesn't affect width */
+      
         }
 
         #customFileInput:hover {
-            background-color: #444;
+            background-color: #005cbf; /* Darker blue on hover */
             transform: scale(1.05);
         }
 
         #customFileInput:active {
-            background-color: #666;
-            transform: scale(1);
+            background-color: #003d7a; /* Even darker blue on click */
+            transform: scale(0.95); /* Press-down effect */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Drop shadow for press effect */
         }
 
         /* Hide the actual file input button */
@@ -89,15 +112,50 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            gap: 20px; /* Space between the file input and import button */
+            margin-bottom: 40px; /* More space between the file input section and the next content */
+            width: 100%;
         }
 
         label {
             cursor: pointer;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px;
+            color: #ffffff;
+            line-height: 1.5; /* Increased line-height for label */
+            padding: 10px 0; /* Added padding for more spacing around label text */
+            margin-bottom: 10px; /* Space between label and input */
+            width: 100%; /* Ensure label spans the full width */
+            text-align: center; /* Center align label text */
         }
+
+        input[type="text"] {
+            background-color: #222;
+            border: 4px solid #ffffff; /* Thicker and more pixelated white border */
+            color: #ffffff;
+            padding: 16px 30px; /* Added more padding for text input */
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px;
+            border-radius: 5px;
+            margin-bottom: 30px; /* Increased margin for spacing between input and button */
+            width: 100%; /* Full width for the text input */
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #00ff00; /* Retro green focus border */
+        }
+
     </style>
+
+    <!-- Importing a retro pixelated font -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 
 <body>
+    <h1>Console</h1>
+
     <div class="button-container">
         <button onclick="navigateToPage()">BACK TO GAME</button>
         <button id="tumama">Get lots of CCS</button>
@@ -114,10 +172,12 @@
         <button id="fr">FR Mode</button>
     </div>
 
-    <!-- Custom File Input -->
-    <div class="center">
-        <label for="importFile" id="customFileInput">Choose File</label>
-        <input type="file" id="importFile" accept=".txt" />
+    <!-- Custom File Input and Import buttons in the same layout -->
+    <div class="button-container">
+        <div class="center">
+            <label for="importFile" id="customFileInput">Choose File</label>
+            <input type="file" id="importFile" accept=".txt" />
+        </div>
         <button id="import">Import Data</button>
     </div>
 
