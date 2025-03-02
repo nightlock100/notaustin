@@ -325,6 +325,35 @@
         function navigateToPage() {
             window.location.href = 'https://nightlock100.github.io/notaustin/index.html'; // Replace with your game page URL
         }
+
+
+      // Handle file import functionality
+document.getElementById("import").addEventListener("click", function() {
+    const fileInput = document.getElementById("importFile");
+    const file = fileInput.files[0]; // Get the first file
+
+    if (file) {
+        const reader = new FileReader();
+        
+        // Define the function to handle file reading
+        reader.onload = function(e) {
+            const fileContent = e.target.result; // Get the content of the file
+
+            // Save the content to localStorage as the RetroBowl save file
+            localStorage.setItem("RetroBowl.0.savedata.ini", fileContent);
+            alert("File imported successfully!");
+
+            // Optionally, you can also display the content for verification
+            console.log(fileContent);
+        };
+        
+        // Read the file as text
+        reader.readAsText(file);
+    } else {
+        alert("Please choose a file first.");
+    }
+});
+  
     </script>
 </body>
 
