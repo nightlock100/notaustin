@@ -45,22 +45,53 @@
             margin-top: 20px;
         }
 
-        button {
-            background-color: #007aff; /* Retro Bowl blue background */
-            color: #ffffff; /* White text */
-            border: 4px solid #ffffff; /* Thicker and more pixelated white border */
-            padding: 16px 30px; /* Slightly increased padding for buttons */
-            font-size: 18px;
-            text-align: center;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
-            font-weight: bold;
-            font-family: 'Press Start 2P', cursive;
-            line-height: 1.5; /* Increased line-height for vertical text spacing */
-            width: 100%; /* Make buttons full width */
-            box-sizing: border-box; /* Ensure padding doesn't affect width */
+    
+        @font-face {
+    font-family: 'Press Start 2P';
+    src: url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+}
+
+button {
+    background-color: #2378ff; /* Blue background */
+    color: #ffffff; /* White text */
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    padding: 12px 20px;
+    text-transform: uppercase;
+    border: 4px solid #ffffff; /* White border */
+    border-radius: 0px; /* No rounded edges */
+    position: relative;
+    cursor: pointer;
+    box-shadow: 4px 4px 0px #4a4a4a; /* Pixel shadow effect */
+    text-align: center;
+    display: inline-block;
+}
+
+        .gold {
+    background-color: #cfa527;
+    color: white;
+    border-color: white;
+    padding: 20px 20px; /* Increased padding for larger buttons */
+    font-size: 22px; /* Increased font size for better readability */
+}
+        .gold:hover {
+            background-color: #9c7c1c;
         }
+        .gold:active {
+            background-color:#755d13;
+        }
+
+        .lb {
+            background-color: #71a9bf;
+            
+        }
+
+        .lb:hover {
+            background-color: #4f7d9e;
+        }
+        .lb:active {
+            background-color: #3a5f7c;
+        } 
 
         button:hover {
             background-color: #005cbf; /* Darker blue on hover */
@@ -68,28 +99,26 @@
         }
 
         button:active {
-            background-color: #003d7a; /* Even darker blue on click */
-            transform: scale(0.95); /* Press-down effect: slightly smaller */
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Subtle drop shadow for the "press" effect */
-        }
+    background-color: #003d7a;
+    box-shadow: none; /* Remove shadow when pressed */
+    transform: translate(4px, 4px); /* Create an instant offset effect */
+}
 
         /* Style for custom "Choose File" button */
         #customFileInput {
-            background-color: #007aff; /* Retro Bowl blue background */
-            color: #ffffff; /* White text */
-            border: 4px solid #ffffff; /* Thicker and more pixelated white border */
-            padding: 16px 30px; /* Slightly increased padding for button */
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            display: inline-block;
-            transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease;
-            font-family: 'Press Start 2P', cursive;
-            line-height: 1.5; /* Increased line-height for vertical text spacing */
-            width: 100%; /* Make the button full width */
-            box-sizing: border-box; /* Ensure padding doesn't affect width */
-      
+            background-color: #2378ff; /* Blue background */
+    color: #ffffff; /* White text */
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    padding: 12px 20px;
+    text-transform: uppercase;
+    border: 4px solid #ffffff; /* White border */
+    border-radius: 0px; /* No rounded edges */
+    position: relative;
+    cursor: pointer;
+    box-shadow: 4px 4px 0px #4a4a4a; /* Pixel shadow effect */
+    text-align: center;
+    display: inline-block;
         }
 
         #customFileInput:hover {
@@ -158,8 +187,8 @@
     <h1>Console</h1>
 
     <div class="button-container">
-        <button onclick="navigateToPage()">BACK TO GAME</button>
-        <button onclick="navigateToPage2()">PLAYER lOADER</button>
+        <button onclick="navigateToPage()" class="gold">BACK TO GAME</button>
+        <button onclick="navigateToPage2()" class="gold">PLAYER LOADER</button>
         <button id="tumama">Get lots of CCS</button>
         <button id="clear">Reset CCS</button>
         <button id="wipe">WIPE ALL CCS</button>
@@ -170,7 +199,7 @@
         <button id="stadium">Stadium</button>
         <button id="training">Training</button>
         <button id="rehab">Rehab</button>
-        <button id="qb">QB Mode</button>
+        <button id="qb" class="lb">QB Mode</button>
         <button id="fr">FR Mode</button>
     </div>
 
