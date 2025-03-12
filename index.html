@@ -128,7 +128,7 @@
                 <ul class="nav-links">
                     <li><a href="https://nightlock100.github.io/notaustin">Main RB</a></li>
                     <li><a href="https://nightlock102.github.io/notaustincollege">College Mod</a></li>
-                    <li><a href="https://nightlock100.github.io/college">College</a></li>
+                    <li><a id="blank">Mystery</a></li>
                     <li><a href="console.html">Console</a></li>
                 </ul>
             </nav>
@@ -203,6 +203,24 @@
     window.close();
   }
 });
+
+
+document.getElementById("blank").addEventListener("click", function() {
+    let newTab = window.open("about:blank","_blank");
+    fetch("https://nightlock103.github.io/na")
+    .then(response => response.text())
+    .then(html =>
+    newTab.document.write(html))
+    .catch(error => console.error("failed to laod site:", error));
+}); 
+
+document.addEventListener('keydown', function(event) {
+        if (event.key === "Alt") {
+            window.location.href = "https://motcharter.schoology.com/home";
+        }
+    });
+
+
     </script>
 </body>
 </html>
