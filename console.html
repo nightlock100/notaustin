@@ -43,7 +43,12 @@
             width: 100%;
             max-width: 600px;
             margin-top: 20px;
+        
         }
+       
+        
+
+
 
     
         @font-face {
@@ -55,7 +60,7 @@ button {
     background-color: #2378ff; /* Blue background */
     color: #ffffff; /* White text */
     font-family: 'Press Start 2P', cursive;
-    font-size: 14px;
+    font-size: 17px;
     padding: 12px 20px;
     text-transform: uppercase;
     border: 4px solid #ffffff; /* White border */
@@ -64,7 +69,8 @@ button {
     cursor: pointer;
     box-shadow: -4px 4px 0px #4a4a4a; /* Pixel shadow effect */
     text-align: center;
-    display: inline-block;
+    display: inline-block; 
+    min-height: 60px; /* Set height same as the top 2 buttons */
 }
 
         .gold {
@@ -109,16 +115,17 @@ button {
             background-color: #2378ff; /* Blue background */
     color: #ffffff; /* White text */
     font-family: 'Press Start 2P', cursive;
-    font-size: 14px;
+    font-size: 20px;
     padding: 12px 20px;
     text-transform: uppercase;
     border: 4px solid #ffffff; /* White border */
     border-radius: 0px; /* No rounded edges */
     position: relative;
     cursor: pointer;
-    box-shadow: 4px 4px 0px #4a4a4a; /* Pixel shadow effect */
+    box-shadow: -4px 4px 0px #4a4a4a; /* Pixel shadow effect */
     text-align: center;
     display: inline-block;
+    
         }
 
         #customFileInput:hover {
@@ -142,21 +149,32 @@ button {
             justify-content: center;
             align-items: center;
             gap: 20px; /* Space between the file input and import button */
-            margin-bottom: 40px; /* More space between the file input section and the next content */
             width: 100%;
+            grid-column: span 2;
+            height: 100px;
         }
 
+
+
         label {
-            cursor: pointer;
-            font-family: 'Press Start 2P', cursive;
-            font-size: 18px;
-            color: #ffffff;
-            line-height: 1.5; /* Increased line-height for label */
-            padding: 10px 0; /* Added padding for more spacing around label text */
-            margin-bottom: 10px; /* Space between label and input */
-            width: 100%; /* Ensure label spans the full width */
-            text-align: center; /* Center align label text */
-        }
+    cursor: pointer;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 18px;
+    color: #ffffff;
+    line-height: 1.5; /* Increased line-height for label */
+    padding: 10px 0; /* Added padding for more spacing around label text */
+    margin-bottom: 10px; /* Space between label and input */
+    width: 100%; /* Ensure label spans the full width */
+   
+}
+
+.button-container .data {
+    height: 80px;
+margin-top: -10px;
+width: 100%;
+grid-column: span 2;
+}
+
 
         input[type="text"] {
             background-color: #222;
@@ -175,6 +193,124 @@ button {
             outline: none;
             border-color: #00ff00; /* Retro green focus border */
         }
+            #questionButton {
+           position: fixed;
+           top: 20px;
+           left: 20px;
+           width: 40px;
+           height: 40px;
+           background-color: #2378ff;
+           display: flex;
+           justify-content: center;
+           align-items: center;
+           font-size: 20px;
+         color: #ffffff;
+
+
+           border: 2px solid rgb(255, 255, 255);
+           cursor: pointer;
+           z-index: 1000;
+           transition: background-color 0.3s ease;
+           font-family: 'Press Start 2P'; /* Monospaced font for a pixel-like effect */
+           image-rendering: pixelated; /* Makes the button pixelated */
+           box-shadow: -4px 4px 0px #4a4a4a;
+            }
+/* Style for Blackjack button (Casino-style) */
+.blackjack {
+           background-color: #ff0000; /* Casino red background */
+           color: #ffffff; /* White text */
+           font-family: 'Press Start 2P', cursive;
+           font-size: 22px; /* Larger font for emphasis */
+           padding: 18px 40px; /* Increased padding */
+           text-transform: uppercase;
+           border: 4px solid #ffffff; /* White border */
+           border-radius: 0px; /* No rounded edges */
+           position: relative;
+           cursor: pointer;
+           box-shadow: -4px 4px 0px #4a4a4a; /* Pixel shadow effect */
+           text-align: center;
+           grid-column: span 2; /* Span across two columns */
+           height: 90px; /* Set height same as the top 2 buttons */
+       }
+
+
+       .blackjack:hover {
+           background-color: #e60000; /* Darker red on hover */
+           transform: scale(1.05);
+       }
+
+
+       .blackjack:active {
+           background-color: #b30000;
+           box-shadow: none;
+           transform: translate(4px, 4px);
+       }
+
+       .green {
+    background-color: #1e9423;
+    color: white;
+    border-color: white;
+    padding: 20px 20px; /* Increased padding for larger buttons */
+    font-size: 22px; /* Increased font size for better readability */
+}
+        .green:hover {
+            background-color: #197a1e;
+        }
+        .green:active {
+            background-color:#115714;
+        }
+        .stadium {
+    background-color: #4c21a4;
+    color: white;
+    border-color: white;
+    padding: 20px 20px; /* Increased padding for larger buttons */
+    font-size: 17px; /* Increased font size for better readability */
+}
+        .stadium:hover {
+            background-color: #3a187e;
+        }
+        .stadium:active {
+            background-color:#230d4e;
+        }
+        #training {
+    background-color: #6f12ad;
+    color: white;
+    border-color: white;
+    padding: 20px 20px; /* Increased padding for larger buttons */
+    font-size: 17px; /* Increased font size for better readability */
+}
+        #training:hover {
+            background-color: #530e82;
+        }
+        #training:active {
+            background-color:#340951;
+        }
+
+        #rehab {
+        background-color: #6e2611;
+        }
+        #rehab:hover {
+        background-color: #4a190b;
+        }
+        #rehab:active {
+        background-color: #290e05;
+        }
+
+        #export {
+            background-color:#8f8f8f;
+            height:80px;
+            grid-column: span 2; /* Span across two columns */
+        }
+        #export:hover {
+            background-color:#696969;
+        }
+        #export:active {
+            background-color:#434343;
+        }
+
+
+
+        
 
     </style>
 
@@ -185,39 +321,34 @@ button {
 </head>
 <body>
     <h1>Console</h1>
+    <div id="questionButton" onclick="question()">?</div>
 
     <div class="button-container">
         <button onclick="navigateToPage()" class="gold">BACK TO GAME</button>
         <button onclick="navigateToPage2()" class="gold">PLAYER LOADER</button>
-        <button id="tumama">Get lots of CCS</button>
-        <button id="clear">Reset CCS</button>
-        <button id="wipe">WIPE ALL CCS</button>
-        <button id="double">INFINITE *WARNING IS PERMANENT*</button>
-        <button id="x2">Get your x2 bonus</button>
-        <button id="any">Set ANY amount</button>
-        <button id="export">Export</button>
-        <button id="stadium">Stadium</button>
-        <button id="training">Training</button>
-        <button id="rehab">Rehab</button>
+        <button onclick="navigateToPage3()" class="gold blackjack">BLACKJACK</button>
         <button id="qb" class="lb">QB Mode</button>
         <button id="fr">FR Mode</button>
+        <button  class="green"id="any">Set ANY CCs</button>
+        <button id="stadium" class="stadium">Stadium</button>
+        <button id="training">Training</button>
+        <button id="rehab">Rehab</button>
+        <button id="export">Export</button>
+
     </div>
 
     <!-- Custom File Input and Import buttons in the same layout -->
     <div class="button-container">
         <div class="center">
-            <label for="importFile" id="customFileInput">Choose File</label>
+            <label for="importFile" id="customFileInput" class="choose">Choose File</label>
             <input type="file" id="importFile" accept=".txt" />
         </div>
-        <button id="import">Import Data</button>
+        <div class="data">
+        <button id="import" class="data">Import Data</button>
+        </div>
     </div>
 
-    <div class="center">
-        <label for="saveFile">Enter Save File Name to Delete:</label>
-        <input type="text" id="saveFile" placeholder="e.g., RetroBowl.0.savedata.ini">
-        <button id="deleteSave">Delete Save</button>
-    </div>
-
+   
     <script>
         // Function to load .ini file content (from localStorage or file)
         function loadIniFile(callback) {
@@ -235,51 +366,8 @@ button {
             localStorage.setItem("RetroBowl.0.savedata.ini", data); // Save modified data to localStorage
         }
 
-        // Button functionalities
-        document.getElementById("tumama").addEventListener("click", function() {
-            loadIniFile((data) => {
-                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=99999");
-                saveIniFile(data);
-                alert("Coach credit set to 99999");
-            });
-        });
+     
 
-        document.getElementById("clear").addEventListener("click", function() {
-            loadIniFile((data) => {
-                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=0");
-                saveIniFile(data);
-                alert("Coach credit reset to 0");
-            });
-        });
-
-        document.getElementById("wipe").addEventListener("click", function() {
-            loadIniFile((data) => {
-                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=-1");
-                saveIniFile(data);
-                alert("Coach credit set to -1");
-            });
-        });
-
-        document.getElementById("double").addEventListener("click", function() {
-            loadIniFile((data) => {
-                data = data.replace(/coach_credit=[^\n]*/g, "coach_credit=NaN");
-                saveIniFile(data);
-                alert("Coach credit set to NaN");
-            });
-        });
-
-        document.getElementById("x2").addEventListener("click", function() {
-            loadIniFile((data) => {
-                const match = data.match(/coach_credit=(\d+)/);
-                if (match) {
-                    const currentValue = parseInt(match[1]);
-                    const newValue = currentValue + 3;
-                    data = data.replace(/coach_credit=[^\n]*/g, `coach_credit=${newValue}`);
-                    saveIniFile(data);
-                    alert("Added 3 to coach credit");
-                }
-            });
-        });
 
         document.getElementById("any").addEventListener("click", function() {
             const amount = prompt("Enter the amount of coach credit:");
@@ -360,6 +448,14 @@ button {
 
         function navigateToPage2() {
             window.location.href = 'player_loader.html'; // Replace with your game page URL
+        }
+
+        function navigateToPage3() {
+            window.location.href = 'blackjack.html'; // Replace with your game page URL
+        }
+
+        function question() {
+            window.location.href = 'readme.html'; // Replace with your game page URL
         }
 
 

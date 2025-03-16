@@ -106,11 +106,40 @@
             margin: 55px auto;
             margin-bottom: 70px;
         }
+
+        #questionButton {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            background-color: #2378ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+          color: #ffffff;
+
+            border: 2px solid rgb(255, 255, 255);
+            cursor: pointer;
+            z-index: 1000;
+            transition: background-color 0.3s ease;
+            font-family: 'Press Start 2P'; /* Monospaced font for a pixel-like effect */
+            image-rendering: pixelated; /* Makes the button pixelated */
+            box-shadow: -4px 4px 0px #4a4a4a;
+        }
+
+        /* Add hover effect */
+        #questionButton:hover {
+            background-color: #f0f0f0;
+        }
     </style>
     <title>Load Player Data</title>
 </head>
 <body>
     <h1 class="title">Player Loader</h1>
+    <div id="questionButton">?</div>
+
     <h2>Load Player Data</h2>
     <br>
     <div class="container">
@@ -129,6 +158,12 @@
         <button onclick="updatePlayerData()">Update Player Data</button>
     </div>
     <script>
+
+
+             // Redirect to readme.html when the question mark button is clicked
+             document.getElementById('questionButton').onclick = function() {
+            window.location.href = 'readme.html';
+        };
         function loadPlayer() {
             let playerNumber = document.getElementById("playerNumber").value;
             let key = `roster_${playerNumber}`;

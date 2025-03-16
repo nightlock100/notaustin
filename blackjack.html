@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetroBowl Style Blackjack</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: #000;
+            color: #cccccc;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: 'Press Start 2P', cursive;
+        }
+
+        header {
+            background-color: #2356da;
+            padding: 10px 20px;
+            width: 96.5%;
+            border-radius: 0 0 20px 20px;
+            border: solid 1px black;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header a {
+            text-decoration: none;
+            color: white;
+            background-color: #0754d0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: 0.3s;
+        }
+
+        header a:hover {
+            background-color: #333;
+        }
+
+        button {
+            font-family: 'Press Start 2P', cursive;
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #2356da;
+            color: white;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            background-color: #0754d0;
+        }
+
+        input {
+            font-family: 'Press Start 2P', cursive;
+            padding: 5px;
+            margin-top: 10px;
+            width: 80px;
+            text-align: center;
+        }
+
+        #gameArea {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        /* Card Styling */
+        .card {
+            width: 70px;
+            height: 100px;
+            border: 2px solid #fff;
+            border-radius: 10px;
+            background-color: #fff;
+            margin: 10px;
+            display: inline-block;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            font-size: 16px;
+            text-align: center;
+            color: black;
+        }
+
+        .card .value {
+            font-size: 24px;
+            font-weight: bold;
+            line-height: 100px;
+        }
+
+        .card .suit {
+            font-size: 24px;
+        }
+
+        .card .top-left,
+        .card .bottom-right {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            font-size: 18px;
+        }
+
+        .card .bottom-right {
+            bottom: 5px;
+            right: 5px;
+        }
+
+        .card .hidden {
+            background-color: #000;
+            color: #000;
+        }
+
+        .card .hidden .value,
+        .card .hidden .suit {
+            color: transparent;
+        }
+
+        /* Cards Layout */
+        .hand {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* New Color Picker Button */
+        #colorPickerBtn {
+            background-color: #0754d0;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        #colorPickerBtn:hover {
+            background-color: #333;
+        }
+
+        /* Hidden Color Input */
+        #colorInput {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div><a href="#" id="questionButton">?</a></div>
+        <div>Blackjack</div>
+        <div>Credits: <span id="credits">Loading...</span></div>
+    </header>
+
+    <div id="gameArea">
+        <input type="number" id="betAmount" placeholder="Bet" min="1" value="100">
+        <button id="startNewGame">Start New Game</button>
+        <div id="gameOutput"></div>
+        <div id="gameControls"></div>
+        
+        <!-- New Button to Trigger Color Picker -->
+        <button id="colorPickerBtn">Pick Background Color</button>
+        <!-- Hidden Color Picker -->
+        <input type="color" id="colorInput">
+    </div>
+
+    <script>
+        let credits = 0;
+        let deck, playerHand, dealerHand, currentBet;
+
+        const creditsDisplay = document.getElementById('credits');
+        const colorPickerBtn = document.getElementById('colorPickerBtn');
+        const colorInput = document.getElementById('colorInput');
+
+        function loadIniFile(callback) {
+            const data = localStorage.getItem("RetroBowl.0.savedata.ini");
+            if (data) {
+                callback(data);
+            } else {
+                alert("No save data found.");
+            }
+        }
+
+        function loadCredits() {
+            loadIniFile((data) => {
+                const match = data.match(/coach_credit\s*=\s*["']?(\d+)["']?/);
+                if (match) {
+                    credits = parseInt(match[1]);
+                    creditsDisplay.textContent = credits;
+                } else {
+                    alert("Failed to load credits. Make sure 'coach_credit' exists in the save file.");
+                }
+            });
+        }
+
+        function saveCredits() {
+            loadIniFile((data) => {
+                const updatedData = data.replace(/coach_credit\s*=\s*["']?\d+["']?/, `coach_credit="${credits}"`);
+                localStorage.setItem("RetroBowl.0.savedata.ini", updatedData);
+                creditsDisplay.textContent = credits;
+            });
+        }
+
+
+        document.getElementById('questionButton').onclick = () => {
+            window.location.href = 'https://example.com';
+        };
+
+        document.getElementById('startNewGame').onclick = startNewGame;
+
+        // Function to change the background color
+        function changeBackgroundColor(color) {
+            document.body.style.backgroundColor = color;
+        }
+
+        // Event listener for the color picker button
+        colorPickerBtn.onclick = () => {
+            colorInput.click(); // Simulate the user clicking the color input
+        };
+
+        // Event listener for the color input change
+        colorInput.addEventListener('input', (event) => {
+            changeBackgroundColor(event.target.value);
+        });
+
+        function startNewGame() {
+            if (credits <= 0) {
+                alert("You're out of credits!");
+                return;
+            }
+
+            currentBet = parseInt(document.getElementById('betAmount').value);
+
+            if (isNaN(currentBet) || currentBet <= 0 || currentBet > credits) {
+                alert("Invalid bet amount.");
+                return;
+            }
+
+            credits -= currentBet;
+            saveCredits();
+
+            deck = createDeck();
+            playerHand = [drawCard(), drawCard()];
+            dealerHand = [drawCard(), drawCard()];
+
+            renderGame();
+        }
+
+        function createDeck() {
+            const suits = ['♠', '♥', '♦', '♣'];
+            const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+            let deck = [];
+            for (let suit of suits) {
+                for (let value of values) {
+                    deck.push({ value, suit });
+                }
+            }
+            return deck.sort(() => Math.random() - 0.5);
+        }
+
+        function drawCard() {
+            return deck.pop();
+        }
+
+        function getHandValue(hand) {
+            let value = 0;
+            let aces = 0;
+
+            hand.forEach(card => {
+                if (card.value === 'A') {
+                    aces++;
+                    value += 11;
+                } else if (['K', 'Q', 'J'].includes(card.value)) {
+                    value += 10;
+                } else {
+                    value += parseInt(card.value);
+                }
+            });
+
+            while (value > 21 && aces) {
+                value -= 10;
+                aces--;
+            }
+
+            return value;
+        }
+
+        function renderGame() {
+            const playerValue = getHandValue(playerHand);
+            const dealerValue = getHandValue(dealerHand);
+
+            document.getElementById('gameOutput').innerHTML = `
+                <div>Dealer's Hand: <div class="hand">${renderCards(dealerHand, true)}</div> [Hidden]</div>
+                <div>Your Hand: <div class="hand">${renderCards(playerHand)}</div></div>
+                <div>Your Total: ${playerValue}</div>
+            `;
+
+            document.getElementById('gameControls').innerHTML = `
+                <button onclick="hit()">Hit</button>
+                <button onclick="stand()">Stand</button>
+            `;
+        }
+
+        function renderCards(hand, hideFirstCard = false) {
+            return hand.map((card, index) => {
+                const isHidden = hideFirstCard && index === 0 ? "hidden" : "";
+                return `
+                    <div class="card ${isHidden}">
+                        <div class="value">${card.value}</div>
+                        <div class="suit">${card.suit}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function hit() {
+            playerHand.push(drawCard());
+            const playerValue = getHandValue(playerHand);
+
+            if (playerValue > 21) {
+                endGame(false);
+            } else {
+                renderGame();
+            }
+        }
+
+        function stand() {
+            while (getHandValue(dealerHand) < 17) {
+                dealerHand.push(drawCard());
+            }
+            const dealerValue = getHandValue(dealerHand);
+            const playerValue = getHandValue(playerHand);
+
+            endGame(playerValue > dealerValue || dealerValue > 21);
+        }
+
+        function endGame(playerWins) {
+            if (playerWins) {
+                credits += currentBet * 2;
+            }
+            saveCredits();
+
+            document.getElementById('gameOutput').innerHTML = `
+                <div>Dealer's Hand: <div class="hand">${renderCards(dealerHand)}</div></div>
+                <div>Your Hand: <div class="hand">${renderCards(playerHand)}</div></div>
+                <div>${playerWins ? 'You win!' : 'haha loser'}</div>
+            `;
+
+            document.getElementById('gameControls').innerHTML = `<button onclick="startNewGame()">Play Again</button>`;
+        }
+
+        loadCredits();
+    </script>
+</body>
+</html>
