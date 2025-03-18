@@ -162,12 +162,12 @@ ui_Leaderboard_QB	QB Leaderboard
 ui_Name	Name
 ui_News	News
 ui_Traits	Traits
-conf_AFC	AFC
-conf_NFC	NFC
-division_East	East
-division_West	West
-division_North	North
-division_South	South
+conf_AFC	FBS I
+conf_NFC	FBS II
+division_East	B1G 
+division_West	ACC
+division_North	M.W
+division_South	SEC
 sla_East	E
 sla_West	W
 sla_North	N
@@ -184,12 +184,12 @@ Punt	Punt
 Field Goal	Field Goal
 msg_NewGame	Do you want to start a new career?##WARNING!#Your save data and any existing#Coaching Credits will be lost.
 msg_NewGameCredits	Do you want to start a new career?##You have $num of your purchased Coaching Credits remaining that will be transferred to your new save file.
-matchmsg_PlayPunt	Play 4th down or punt?
+matchmsg_PlayPunt	Play 4th down or punt like a wuss?
 matchmsg_PlayFG	Play $down or go for field goal?
 ui_NewTrait	New Trait!
 msg_NewTrait	You have earned a new trait!###$traitname##$traitdesc.
 match_StiffArm	Stiff Arm!
-ui_DivisionLeaders	Division Leaders
+ui_DivisionLeaders	Conf. Leaders
 ui_WildCard	Wild Card
 ui_InTheHunt	In the hunt
 ui_SuperBowl	Retro Bowl
@@ -197,7 +197,7 @@ ui_Super#Bowl	Retro#Bowl
 ui_Champion	Champion
 ui_PlayOffPicture	Playoff Picture
 msg_PlayOffResult	$teamname1 beat $teamname2 $score1-$score2!
-msg_SuperBowlWinner	$teamname1 win the Retro Bowl!
+msg_SuperBowlWinner	$teamname1 win the Super Bowl!
 match_FG_Good	It's good
 match_FG_Bad	No good
 match_Kicking	Kicking
@@ -229,22 +229,22 @@ training_Kick2b	Click to set direction
 training_Pass	Passing Practice
 training_Running	Running Practice
 training_FieldGoal	Field Goal Practice
-match_Caught	Caught
+match_Caught	yoink
 match_Tipped	Tipped
 match_Dropped	Dropped
 msg_NewSeason	A new season begins!
 match_Recovered	Recovered
 match_Turnover	Turnover
 match_Safety	Safety
-matchmsg_PATor2	1 or 2 point conversion?
+matchmsg_PATor2	1 or 2 point conversion? (dont go for 2 you frickin loser be ethical)
 match_1pt	1 pt
 match_2pt	2 pt
 match_Scored	Scored
 ui_ChooseTeam	Choose Team
 ui_DriveDirection	Drive Direction
-ui_driveLeft	Left
+ui_driveLeft	dont use
 ui_driveRight	Right
-ui_driveBoth	Both
+ui_driveBoth	dont use
 pos_QB	QB
 pos_OL	OL
 pos_TE	TE
@@ -257,7 +257,7 @@ pos_CB	CB
 pos_KP	KP
 pos_KK	K
 pos_KR	KR
-pos_DB	DB
+pos_DB	CB
 position_QB	Quarterback
 position_OL	Offensive Lineman
 position_TE	Tight End
@@ -270,7 +270,7 @@ position_CB	Corner Back
 position_KP	Kick Placer
 position_KK	Kicker
 position_KR	Kick Returner
-position_DB	Defensive Back
+position_DB	Dorner Back
 pos_STAFF_HC	HC
 pos_STAFF_DF	DF
 pos_STAFF_OF	OF
@@ -279,7 +279,7 @@ position_STAFF_DF	Defensive Coordinator
 position_STAFF_OF	Offensive Coordinator
 ui_Roster	Roster
 sla_Rookie	R
-ui_SalaryCap	Salary Cap
+ui_SalaryCap	money
 ui_PlayerProfile	Player Profile
 ui_Contract	Contract
 sla_Year	Y
@@ -299,7 +299,7 @@ attitude_2	Poor
 attitude_3	Ok
 attitude_4	Good
 attitude_5	Great
-attitude_6	Exceptional
+attitude_6	very happy :D
 ui_Attitude	Morale
 ui_Rating	Rating
 ui_Age	Age
@@ -333,7 +333,7 @@ msg_SkipDraft	You still have $num picks left.##Do you want to sell your picks in
 msg_SkipDraft1	You still have a pick left in this round.##Do you want to sell it for $value coach credits?
 ui_NoMorePicks	You don't have any picks left.
 ui_NoMorePicksToTrade	You don't have a $num round pick for next season's draft to trade.
-ui_Rookie	Rookie
+ui_Rookie	young bull
 ui_StarPlayers	Star Players
 ui_Details	Details
 ui_Attributes	Attributes
@@ -358,8 +358,8 @@ ui_Players	Players
 info_Skill_Throwing	Throw accuracy determines how much arc you see when aiming a throw.
 info_Skill_Kicking	Kick accuracy determines how fast the aiming arc moves when taking a kick.
 info_Skill_Tackling	Tackling determines how well a player can overthrow his opponent.
-info_Skill_Blocking	Blocking determines how well your lineman can protect the quarterback.
-info_Skill_Speed	Speed represents a player's acceleration and top speed.
+info_Skill_Blocking	Be like madden.
+info_Skill_Speed	speed is like finn speed neooo
 info_Skill_Strength	Strength determines how hard a player hits and how many stiffarms they can do. For quarterbacks and kickers it relates to maximum throw and kick range.
 info_Skill_Catching	Catching relates to how well a player holds on to the ball when catching it and after taking a hit.
 info_Skill_Stamina	Stamina affects how long a player can run at their top speed. For quarterbacks and kickers it determines how much their strength depletes with every throw or kick.
@@ -391,8 +391,8 @@ short_LevelUp	Lvl Up
 ui_Confirm	Confirm
 msg_ContractExpired	$position $playername's contract has expired. He wants a $year year contract with a salary of $salary.
 news_PlayerRetired	$teamname $position $playername has retired at the age of $age.
-news_PlayerRetiringNoTag	$position $playername will retire at the end of the season. He is not tagged for the player hall of fame.
-news_PlayerRetiringTag	$position $playername will retire at the end of the season. You have already tagged him for the player hall of fame.
+news_PlayerRetiringNoTag	$position $playername will retire at the end of the season. He is not tagged for the player the real ones.
+news_PlayerRetiringTag	$position $playername will retire at the end of the season. You have already tagged him for the player the real ones.
 news_PlayerInjured	$position $playername has suffered an injury ($injurytype).##He will be out for $num games.
 news_PlayerInjured1	$position $playername has suffered an injury ($injurytype).##He will be out for 1 game.
 news_PlayerRecovered	$position $playername has recovered from his injury and is fit to play.
@@ -649,7 +649,7 @@ match_Receive	Receive
 news_firstmatchWin	$yourname's first game in charge of $teamname1 ended with a win against $teamname2.##The $teamname1 fans will be looking forward to next season now with renewed hope.
 news_firstmatchLoss	$yourname's first game in charge of $teamname1 ended in defeat against $teamname2.##$yourlastname will be left in no doubt about how much work there is to do to turn this team's fortunes around.
 news_firstmatchTie	$yourname managed to avoid defeat after taking charge of $teamname1.##$yourlastname will be hoping for a good draft to boost their playoff chances next season.
-coachtrait_0	None
+coachtrait_0	frickin loser
 coachtrait_1	Experience
 coachtrait_2	Talent Spotter
 coachtrait_3	Motivator
@@ -733,7 +733,7 @@ choice_IgnoreFine	Ignore Fine
 choice_FinePlayer	Fine Player
 news_CharityWork1	$playername has been praised for his charity work supporting $randomcharity.
 news_CharityWork2	$playername featured on national news when he visited a children's hospital today.
-news_CharityWork3	$playername received an award for his work supporting $randomcharity.
+news_CharityWork3	$playername burned down an orphanage.
 news_CharityWork4	$playername's foundation which supports $randomcharity has received widespread praise.
 news_CharityWork5	$playername has been widely praised for helping to raise money for victims of hurricane $randomfname_female.
 news_CharityWork6	$playername was photographed shaking hands with the president today commemorating the player's foundation which supports $randomcharity.
@@ -741,20 +741,20 @@ btn_ExtendContract	Extend#Contract
 ui_Achievement	Achievement
 ui_Achievements	Achievements
 btn_HallOfFame	Hall of#Fame
-ui_HallOfFame	Hall of Fame
-ui_RetroBowls	Retro Bowls
-ui_RetroBowl	Retro Bowl
+ui_HallOfFame	the real ones
+ui_RetroBowls	Super Bowls
+ui_RetroBowl	Super Bowl
 pos_1	1st
 pos_2	2nd
 pos_3	3rd
 pos_4	4th
 finish_Regular	No
-finish_WildCard	Wild Card
-finish_Divisional	Divisional
-finish_Championship	Champ Rnd
-finish_Champ_AFC	AFC Champs
-finish_Champ_NFC	NFC Champs
-finish_SuperBowl	Champions
+finish_WildCard	Round 1
+finish_Divisional	CFB Quarters
+finish_Championship	CFB Semis
+finish_Champ_AFC	FBS I Champs
+finish_Champ_NFC	RBS II Champs
+finish_SuperBowl	FBS CHAMPS
 ui_History	History
 ui_Finished	Finished
 ui_Record	Record
@@ -779,7 +779,7 @@ ui_Done	Done
 ui_Close	Close
 btn_RestorePurchases	Restore#Purchases
 ui_Connecting	Connecting...
-ui_FavouriteTeam	Favorite Team
+ui_FavouriteTeam	who u like
 msg_Welcome_CO	Welcome to Retro Bowl College!##You are about to start your first season as the head coach of a college football team.##The path to success is an arduous one but if you believe in yourself and can inspire your team then glory awaits!#
 
 msg_Welcome	Welcome to Retro Bowl!##You are about to start your first season as the head coach of a pro football team.##The path to success is an arduous one but if you believe in yourself and can inspire your team then glory awaits!#
@@ -795,7 +795,7 @@ tip_6	Strong players produce more stiff arms in a game
 tip_7	Upgrading your stadium will give the fans an immediate boost
 tip_8	Your quarterback's throwing range depletes during a game according to his stamina
 tip_9	Diving to the ground or running out of bounds will protect against fumbles
-tip_10	Tired players will lose morale
+tip_10	madden husfelt is fat
 tip_11	Some coaches have traits that can give the team a boost
 tip_12	Resting a tired player will boost his morale
 tip_13	A player's game performance can affect his morale
@@ -908,25 +908,25 @@ msg_ExhibitionCantCopyUniforms	You can use your Star Players and your customized
 msg_UnlimitedFeatures	Upgrade to the unlimited version now!##* Get 25 coaching credits *#* Edit team names and uniforms *#* Edit player names *#* Snow and rain weather effects *#* Kickoff Returns *#* Support development! *
 ui_Upgrade	Upgrade
 ui_Difficulty	Difficulty
-ui_Difficulty0	Dynamic
-ui_Difficulty1	Easy
-ui_Difficulty2	Medium
-ui_Difficulty3	Hard
-ui_Difficulty4	Extreme
-ui_Easy	Easy
-ui_Medium	Medium
-ui_Hard	Hard
-ui_Dynamic	Dynamic
+ui_Difficulty0	silly
+ui_Difficulty1	light work
+ui_Difficulty2	less light
+ui_Difficulty3	normal
+ui_Difficulty4	spicy
+ui_Easy	light work
+ui_Medium	less light
+ui_Hard	normal
+ui_Dynamic	silly
 tla_NetPoints	Net
 tla_Percentage	Pct
-info_Options_Difficulty	When set to DYNAMIC the game difficulty will adjust automatically, getting harder when you win games or easier if you lose. The EXTREME setting makes all opponents play with a 5 star rating regardless of what their actual rating is.
+info_Options_Difficulty	When set to SILLY the game difficulty will adjust automatically, getting harder when you win games or easier if you lose. The EXTREME setting makes all opponents play with a 5 star rating regardless of what their actual rating is.
 ui_Save	Save
 ui_ReturnToLoad	Return To#Load Screen
-ui_PlayerHallOfFame	Player Hall of Fame
-msg_RemoveFromHallOfFame	Do you want to remove this player from the Hall of Fame? This cannot be undone.
+ui_PlayerHallOfFame	the real ones
+msg_RemoveFromHallOfFame	Do you want to remove this player from the the real ones? This cannot be undone.
 ui_Remove	Remove
-ui_PlayerHallOfFameEmpty	To put players in your Hall of Fame you need to tag them in the top-left corner of their profile page.
-msg_HofListTooBig	There is no room in the Hall of Fame! Please remove a player before tagging a new one.
+ui_PlayerHallOfFameEmpty	To put players in your the real ones you need to tag them in the top-left corner of their profile page.
+msg_HofListTooBig	There is no room in the the real ones! Please remove a player before tagging a new one.
 msg_TradeAwayRookie	Warning! Trading a recently signed player has a negative impact on team morale and your fan relationship!
 ui_RetroBowlWinners	Retro Bowl Winners
 btn_RetroBowls	Retro   #Bowls
@@ -947,8 +947,8 @@ ui_LongPassAir	Longest pass (air)
 ui_LongFG	Longest field goal
 ui_BestPassGame	Best passing game
 ui_BestPassSeason	Best passing season
-ui_BestPassCareer	Best passing career
-ui_BestRecGame	Best receiving game
+ui_BestPassCareer	bro is slinging it
+ui_BestRecGame	nice catch cheer
 ui_BestRecSeason	Best receiving season
 ui_BestRecCareer	Best receiving career
 ui_BestRushGame	Best rushing game
@@ -1000,22 +1000,22 @@ ui_Champions	Champions
 Champions	Champions
 ui_HeadCoach	Head Coach
 ui_TrainingRegime	Training Regime
-ui_TrainingLight	Light
-ui_TrainingNormal	Normal
-ui_TrainingHard	Hard
+ui_TrainingLight	wussy
+ui_TrainingNormal	normal
+ui_TrainingHard	concentracion camp
 info_TrainingRegime	Setting the training regime to HARD will help players to gain more XP per game. However they will consume more energy, be less happy and their risk of injury is increased.##LIGHT training conserves energy, increases morale and reduces injury risk but XP will be gained at a slower rate than normal.
-news_mvp	$position $playername won the league award for Most Valuable Player!
-news_roty	$position $playername won the league award for Rookie of the Year!
-news_opoy	$position $playername won the league award for Offensive Player of the Year!
-news_dpoy	$position $playername won the league award for Defensive Player of the Year!
+news_mvp	$position $playername won the league award for him award!
+news_roty	$position $playername won the league award for young bull of the Year!
+news_opoy	$position $playername won the league award for heisman!
+news_dpoy	$position $playername won the league award for heisman (d)!
 ui_SeasonRatings	Season Ratings
 msg_SeasonRatings	A fan poll rated the performance of your team for the season...
-rating_Incredible	Incredible
-rating_Great	Great
-rating_Good	Good
-rating_Ok	Ok
-rating_Poor	Poor
-rating_Terrible	Terrible
+rating_Incredible	give him a bag
+rating_Great	star
+rating_Good	role player
+rating_Ok	mid
+rating_Poor	bad
+rating_Terrible	kys
 msg_Watermark	$teamname has a record of $record.
 msg_WatermarkHighlight	The highlight of the season was a win of $result against $oppname.
 msg_WatermarkRestarts	Their season has been tainted by $num false starts.
@@ -1029,7 +1029,7 @@ ui_Roster10	10 Man
 ui_Roster12	12 Man
 msg_FansGood1	The fanbase has grown this season but expectations are higher!
 msg_FansGood2	The fans are expecting great things this season!
-msg_FansGood3	The fans are demanding success this season!
+msg_FansGood3	The fans are demanding success this season! be good
 msg_FansBad1	The fans faith in you has decreased a bit this season.
 msg_FansBad2	Your relationship with the fans has decreased during the off season.
 msg_FansBad3	The fans are expecting a lot from the team this season.
@@ -1042,10 +1042,10 @@ ui_SnowFall	Snow Fall
 ui_Roof	Roof
 ui_ExtraDetails	Extra Details
 btn_EndZone	End#Zone
-tla_MVP	MVP
-tla_ROTY	ROTY
-tla_DPOY	DPOY
-tla_OPOY	OPOY
+tla_MVP	him award
+tla_ROTY	YBOTY
+tla_DPOY	HEI-D
+tla_OPOY	HEI-O
 Rings	Rings
 msg_TradeDeadline	The trade deadline is this week.##From next week on, you will only be able to cut players from the team, not trade them away, until next season. You will still be able to hire players from the Free Agents list.
 news_ConferenceChamps	$teamname are the $conference champions!
@@ -1080,7 +1080,7 @@ msg_BoostCondition	Do you want to give the team a condition boost for $num coach
 msg_BoostConditionNoCredit	You need $num coach credits to boost the team condition.
 msg_BoostConditionAlreadyDone	You have already had a boosted the team condition this week.
 msg_BoostConditionEvent0	You organized a spa day.
-msg_BoostConditionEvent1	The team dosed up on vitamins.
+msg_BoostConditionEvent1	The team dosed up on drugs.
 msg_BoostConditionEvent2	You gave the team an extra rest day.
 msg_BoostConditionEvent3	You bring in a renowned health guru to talk to the squad.
 msg_BoostConditionEvent4	Ice baths and oxygen tents all round!
@@ -1103,7 +1103,7 @@ ui_DelayRetirement	Delay Retirement
 msg_MeetingExtendContract	It will cost $num coach credits to persuade $playername to extend his contract by 1 year.##Do you want to proceed?
 msg_MeetingDelayRetirement	It will cost $num coach credits to persuade $playername to delay his retirement by 1 year.##Do you want to proceed?
 msg_MeetingTooOld	$playername feels he is too old to continue playing.
-ui_Retiring	Retiring
+ui_Retiring	thinks we suck
 btn_ScoutPlayer	Scout#Player
 ui_Ball	Ball
 msg_boost_morale1	You give $playername a morale boosting pep-talk!
@@ -1114,7 +1114,7 @@ msg_boost_condition2	The team doctor gives $playername some relaxation pills.
 msg_boost_condition3	$playername had a great session with a renowned health guru.
 msg_MeetingLevelUp1	Do you want to level up $playername by going through some extra reps on the training field with him?##It will cost you $num coach credits.
 msg_MeetingLevelUp2	Do you want to level up $playername by spending time watching game film with him?##It will cost you $num coach credits.
-msg_MeetingLevelUp3	Do you want to put $playername in touch with a hall of famer in order to pick up some pro tips?##It will cost you $num coach credits.
+msg_MeetingLevelUp3	Do you want to put $playername in touch with a the real onesr in order to pick up some pro tips?##It will cost you $num coach credits.
 ui_Correct	Correct
 ui_Wrong	Wrong
 tla_Week	Wk
@@ -1271,7 +1271,7 @@ short_Interceptions	Int
 short_ForcedFumbles	F.Fmb
 ui_SeasonReview	Season Review
 ui_Review	Review
-msg_TagMessageHOF	This tag allows you to select a player for your franchise Hall of Fame. His stats will be recorded even after he leaves the team or retires.
+msg_TagMessageHOF	This tag allows you to select a player for your franchise the real ones. His stats will be recorded even after he leaves the team or retires.
 msg_TagMessageKR	WRs, RBs and DBs can be selected as a Kick Returner. They will catch and return the ball from kick offs.##You can only assign one kick returner.
 msg_KickReturns	You can now choose a player to return kickoffs!##Simply head over to the player profile of any RB, WR or DB and select the green tag in the top-left corner of the screen.
 msg_TouchBack	TOUCHBACKS#If your kick returner receives a kickoff in the end zone you can attempt a DIVE to initiate a touchback. You will then start your drive from the 25 yard line.
@@ -1300,7 +1300,7 @@ ui_Energy	Energy
 ui_Lifestyle	Lifestyle
 ui_Buy	Buy
 ui_BuyNRG	Buy#NRG
-ui_Drink	Drink
+ui_Drink	dwink dwink dwink
 ui_DrinkNRG	Drink#NRG
 ui_NRG	NRG
 ui_Meet	Meet
@@ -1375,8 +1375,8 @@ btn_GenerateCharacter	Random#Character
 msg_NeedBossHead	You need to select a face for yourself.##Tap on the head coach card to choose an image.
 info_HeadCoach	This is you! Your morale is affected by team morale and fan approval. Your star rating will increase with victories!
 ui_RetroBowlRecord	Retro Bowl Record
-tla_RBMVP	RBMVP
-msg_RetroBowlMVPWinner	$playername was named the Retro Bowl MVP!
+tla_RBMVP	hero
+msg_RetroBowlMVPWinner	$playername was named the hero!
 btn_Achievements	Achieve-#ments
 ui_RetroBowlWinners	Retro Bowl Winners
 match_SkipTime	Skip Time
