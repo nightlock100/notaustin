@@ -525,7 +525,7 @@ document.getElementById("import").addEventListener("click", function() {
             const fileContent = e.target.result; // Get the content of the file
 
             // Save the content to localStorage as the RetroBowl save file
-            localStorage.setItem("RetroBowl.0.savedata.ini", fileContent);
+            localStorage.setItem("RetroBowl.savedata.0.ini", fileContent);
             alert("File imported successfully!");
 
             // Optionally, you can also display the content for verification
@@ -541,7 +541,7 @@ document.getElementById("import").addEventListener("click", function() {
   
 function checkAndSetUserColor() {
             // Retrieve the saved data from localStorage
-            let savedData = localStorage.getItem("RetroBowl.0.savedata.ini");
+            let savedData = localStorage.getItem("RetroBowl.savedata.0.ini");
 
             // If savedData doesn't exist, initialize it as an empty string
             if (!savedData) {
@@ -562,7 +562,7 @@ function checkAndSetUserColor() {
                 savedData = savedData.replace(/user_color\s*=\s*"(\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})"/, `user_color = "${r}, ${g}, ${b}"`);
 
                 // Store the updated data back into localStorage
-                localStorage.setItem("RetroBowl.0.savedata.ini", savedData);
+                localStorage.setItem("RetroBowl.savedata.0.ini", savedData);
 
                 alert("Color updated successfully!");
             } else {
@@ -577,7 +577,7 @@ function checkAndSetUserColor() {
                 }
 
                 // Store the updated data in localStorage
-                localStorage.setItem("RetroBowl.0.savedata.ini", savedData);
+                localStorage.setItem("RetroBowl.savedata.0.ini", savedData);
 
                 alert("Color set successfully!");
             }
