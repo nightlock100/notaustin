@@ -84,18 +84,12 @@
         }
 
         /* Game canvas styling */
- /* Make the canvas take up the full width of the screen and maintain aspect ratio */
-    canvas {
-        width: 100%;
-        height: auto; /* Let the height adjust automatically to preserve aspect ratio */
-        margin-top: 0;
-        display: block;
-        max-width: 100%; /* Prevent the canvas from stretching too wide */
-    }
-
-        #canvas { width: 100%; 
-                 height: auto;
-                 max:width
+        canvas {
+            width: 100%;
+            height: 100%; /* Take up the full height of the screen */
+            margin-top: 0; /* Remove any space above the canvas */
+            display: block; /* Ensure canvas is displayed as block level element */
+        }
 
         /* Ensure responsive design */
         @media (max-width: 768px) {
@@ -121,7 +115,7 @@
         }
     </style>
 
-    <title>Schoology</title>
+    <title>Home | Schoology</title>
     <link rel="icon" href="schoology.png" type="image/x-icon" />
 </head>
 
@@ -132,8 +126,8 @@
             <nav class="navbar" id="navbar">
                 <h1 class="main-heading">Retro Bowl</h1>
                 <ul class="nav-links">
-                    <li><a href="https://nightlock100.github.io/notaustin">Main RB</a></li>
-                    <li><a href="https://nightlock102.github.io/notaustincollege">College Mod</a></li>
+                    <li><a href="https://nightlock100.github.io/nightlock101">Main RB</a></li>
+                    <li><a href="https://nightlock102.github.io/nightlock101">College Mod</a></li>
                     <li><a href="readme.html">Read Me!</a></li>
                     <li><a href="console.html">Console</a></li>
                 </ul>
@@ -150,32 +144,35 @@
     </div>
 
     <!-- Run the game code -->
-        <script type="text/javascript" src="html5game/RetroBowl.js"></script>
- <script type="text/javascript" src="mod-menu.js"></script>
+    <script class="supersigma" type="text/javascript" src="html5game/RetroBowl.js?ILABC=1551937871"></script>
 
-    <script>
-    // Make sure to adjust the canvas size dynamically on window resize
-    function resizeCanvas() {
-        var canvas = document.getElementById('canvas');
-        var width = window.innerWidth; // Get the width of the screen
-        var aspectRatio = 640 / 360;  // Define the aspect ratio (640px / 360px)
-
-        // Adjust the width of the canvas and maintain the aspect ratio for the height
-        canvas.width = width;
-        canvas.height = width / aspectRatio;
-    }
-
-    // Call the function on window resize
-    window.addEventListener('resize', resizeCanvas);
-
-    // Call it initially to set the correct size on page load
-    resizeCanvas();
-</script>
     <!-- Poki SDK integration -->
- <script src="poki-sdk.js"></script>
- <script src="html5game/RetroBowl.js"></script>
+    <script src="patch/js/poki-sdk.js"></script>
+    <script>
+        (function() {
+            function fin(ok) {
+                window.PokiSDK_OK = ok;
+                GameMaker_Init();
+            }
+            window.addEventListener("load", function(_) {
+                window.PokiSDK_loadState = 0;
+                if (window.PokiSDK) {
+                    PokiSDK.init().then(function() {
+                        fin(true);
+                    }).catch(function() {
+                        fin(false);
+                    });
+                } else {
+                    window.PokiSDK = null;
+                    fin(false);
+                }
+            });
+        })();
+    </script>
+
     <!-- Analytics and additional scripts -->
- 
+    <script src="js/analytics_ubg_v1_4.js"></script>
+    <script src="js/ubg235_client_v1_1.js"></script>
 
     <script>
         // Handle Enter key press to toggle navbar visibility
@@ -223,8 +220,6 @@ document.addEventListener('keydown', function(event) {
         }
     });
 
-
-      
 
     </script>
 </body>
