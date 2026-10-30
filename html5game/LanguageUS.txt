@@ -35,10 +35,10 @@ sex_0	Female
 sex_1	Male
 ui_Defense	Defense
 ui_Offense	Offense
-quarter_1	1st Qtr
-quarter_2	2nd Qtr
-quarter_3	3rd Qtr
-quarter_4	4th Qtr
+quarter_1	1Q
+quarter_2	2Q
+quarter_3	3Q
+quarter_4	4Q
 quarter_5	OT
 match_Touchdown	Touchdown
 match_Interception	Interception
@@ -72,10 +72,10 @@ comm_stage_DriveHailMary0	It's a hail mary throw
 comm_stage_DriveHailMary1	It's a huge throw
 comm_stage_DriveHailMary2	The quarterback airs it out
 comm_stage_Turnover_Fumble	It's a fumble!
-comm_stage_Turnover_Interception	Interception!
+comm_stage_Turnover_Interception	Picked off!
 comm_stage_Turnover_Sack	The quarterback is sacked!
 comm_stage_TurnoverHuman	$teamname turn it over
-comm_stage_TurnoverHuman4th	$teamname turn it over on 4th down
+comm_stage_TurnoverHuman4th	$teamname turns it over on 4th down
 comm_stage_Touchdown	$teamname score!
 comm_stage_Punt	$teamname punt
 comm_stage_PAT1	Point after touchdown...
@@ -236,15 +236,15 @@ msg_NewSeason	A new season begins!
 match_Recovered	Recovered
 match_Turnover	Turnover
 match_Safety	Safety
-matchmsg_PATor2	1 or 2 point conversion? (dont go for 2 you frickin loser be ethical)
+matchmsg_PATor2	1 or 2 point conversion? 
 match_1pt	1 pt
 match_2pt	2 pt
 match_Scored	Scored
 ui_ChooseTeam	Choose Team
 ui_DriveDirection	Drive Direction
-ui_driveLeft	dont use
+ui_driveLeft	Left
 ui_driveRight	Right
-ui_driveBoth	dont use
+ui_driveBoth	Both
 pos_QB	QB
 pos_OL	OL
 pos_TE	TE
