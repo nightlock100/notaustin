@@ -403,7 +403,7 @@ grid-column: span 2;
         // Function to load .ini file content (from localStorage or file)
         function loadIniFile(callback) {
             // Check if the file is in localStorage
-            const data = localStorage.getItem("RetroBowl.0.savedata.ini");
+            const data = localStorage.getItem("RetroBowl.savedata.0.ini");
             if (data) {
                 callback(data);
             } else {
@@ -413,7 +413,7 @@ grid-column: span 2;
 
         // Function to save modified .ini data
         function saveIniFile(data) {
-            localStorage.setItem("RetroBowl.0.savedata.ini", data); // Save modified data to localStorage
+            localStorage.setItem("RetroBowl.savedata.0.ini", data); // Save modified data to localStorage
         }
 
      
