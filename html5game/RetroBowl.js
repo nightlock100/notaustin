@@ -81,7 +81,7 @@ function rbCreditMiss(_inst, _other, code) {
     } catch (e) {}
 }
 // ---- Presnap RB sub menu: small arrow button -> RB player card -> tap card to sub in the next RB ----
-var rbSub = { open: false, snapKey: -1, ctlId: null, override: null, teOverride: null, wrOverride: null, page: 0, wasDown: false, hit: 0, cycling: false };
+var rbSub = { open: false, snapKey: -1, ctlId: null, override: null, teOverride: null, wrOverride: null, wr2Override: null, page: 0, wasDown: false, hit: 0, cycling: false };
 
 // ---- RB in-game fatigue: tracked per player per game, applied as a real speed/strength nerf ----
 var RB_FAT_SNAP = 2;        // fatigue gained each play he is on the field
@@ -113,7 +113,7 @@ function rbFatigueApply(_inst, _other) {
         var pm = _inst.gmlpmap;
         if (!(pm >= 0)) return;
         if (!rbSub.cycling) {
-            var list = wr ? rbWrList(_inst, _other) : rbSubList(_inst, _other, _inst.gmlte_keep === true ? 3 : 2);
+            var list = wr ? rbWrList(_inst, _other, wr) : rbSubList(_inst, _other, _inst.gmlte_keep === true ? 3 : 2);
             for (var i = 0; i < list.length; i++) {
                 var r = rbFatRec(cont, list[i]);
                 var tc = rbNum(list[i], "stat_rush_attempts") + rbNum(list[i], "stat_attempts");
@@ -149,7 +149,7 @@ function rbSubAvailable(_inst, _other) {
 }
 function rbSubSync(_inst, _other) {
     var cont = yyInst(_inst, _other, 104);
-    if (rbSub.ctlId !== cont.id) { rbSub.ctlId = cont.id; rbSub.override = null; rbSub.teOverride = null; rbSub.wrOverride = null; rbSub.page = 0; rbSub.snapKey = -1; rbSub.open = false; }
+    if (rbSub.ctlId !== cont.id) { rbSub.ctlId = cont.id; rbSub.override = null; rbSub.teOverride = null; rbSub.wrOverride = null; rbSub.wr2Override = null; rbSub.page = 0; rbSub.snapKey = -1; rbSub.open = false; }
     var sk = Number(cont.gmlsnaps);
     if (rbSub.snapKey !== sk) { rbSub.snapKey = sk; rbSub.open = false; }
 }
@@ -194,13 +194,13 @@ function rbTeOk() {
 }
 function rbSubCycle(_inst, _other) {
     var pg = rbSub.page;
-    var list = pg === 2 ? rbWrList(_inst, _other) : rbSubList(_inst, _other, pg === 1 ? 3 : 2);
-    var p = pg === 2 ? rbWrField(_inst, _other) : (pg === 1 ? rbTeField() : rbSubField());
+    var list = pg >= 2 ? rbWrList(_inst, _other, pg - 1) : rbSubList(_inst, _other, pg === 1 ? 3 : 2);
+    var p = pg >= 2 ? rbWrField(_inst, _other, pg - 1) : (pg === 1 ? rbTeField() : rbSubField());
     if (!p || list.length < 2) return;
     var cur = 0;
     for (var i = 0; i < list.length; i++) { if (Number(list[i]) === Number(p.gmlpmap)) { cur = i; break; } }
     var nxt = list[(cur + 1) % list.length];
-    if (pg === 2) rbSub.wrOverride = nxt; else if (pg === 1) rbSub.teOverride = nxt; else rbSub.override = nxt;
+    if (pg === 3) rbSub.wr2Override = nxt; else if (pg === 2) rbSub.wrOverride = nxt; else if (pg === 1) rbSub.teOverride = nxt; else rbSub.override = nxt;
     rbSub.cycling = true;
     try { gml_Script_s_set_skills_and_skin(p, yyInst(_inst, _other, 104)); } finally { rbSub.cycling = false; }
 }
@@ -233,12 +233,13 @@ function rbTeApply(_inst, _other) {
     } catch (e) {}
 }
 // ---- WR1 sub: WR1 = first WR in roster order. Only bench WRs (not one of the 3 starting WRs) can replace him ----
-function rbWrOne(_inst, _other) {
+// ---- WR1 / WR2 sub: WR1 = roster WR slot 1, WR2 = roster WR slot 2. Only bench WRs (not one of the 3 starting WRs) can replace them ----
+function rbWrOne(_inst, _other, slot) {
     try {
         var cont = yyInst(_inst, _other, 104);
         var roster = cont.gmlteam_roster[Number(cont.gmlpossession)];
         if (!(roster >= 0)) return -4;
-        return gml_Script_s_get_player_by_position_from_roster_slotaware(_inst, _other, 4, 1, roster);
+        return gml_Script_s_get_player_by_position_from_roster_slotaware(_inst, _other, 4, slot, roster);
     } catch (e) { return -4; }
 }
 function rbWrStarters(_inst, _other) {
@@ -256,11 +257,21 @@ function rbWrStarters(_inst, _other) {
     } catch (e) {}
     return out;
 }
-function rbWrList(_inst, _other) {
+function rbWrOv(slot) { return slot === 2 ? rbSub.wr2Override : rbSub.wrOverride; }
+function rbWrWant(_inst, _other, slot) {   // the player who should be on the field in this WR spot right now
+    var w = rbWrOne(_inst, _other, slot), ov = rbWrOv(slot);
+    return ov !== null ? Number(ov) : Number(w);
+}
+function rbWrList(_inst, _other, slot) {
     var out = [];
-    var w = rbWrOne(_inst, _other);
+    var w = rbWrOne(_inst, _other, slot);
     if (!(w >= 0)) return out;
-    out.push(w);
+    var o = slot === 2 ? 1 : 2;
+    var wo = rbWrOne(_inst, _other, o), ovo = rbWrOv(o);
+    // this spot's starter is only listed if the other spot hasn't taken him
+    if (!(ovo !== null && Number(ovo) === Number(w))) out.push(w);
+    // the other spot's starter becomes available once he has been subbed out of that spot
+    if (wo >= 0 && ovo !== null && Number(ovo) !== Number(wo)) out.push(wo);
     var starters = rbWrStarters(_inst, _other);
     var cont = yyInst(_inst, _other, 104);
     var roster = cont.gmlteam_roster[Number(cont.gmlpossession)];
@@ -272,60 +283,70 @@ function rbWrList(_inst, _other) {
         if (rbNum(pm, "position") !== 4) continue;
         if (rbNum(pm, "condition") < 0) continue;
         if (yyGetBool(gml_Script_s_player_benched(_inst, _other, pm))) continue;
+        if (ovo !== null && Number(ovo) === Number(pm)) continue;   // already in the other WR spot
         var isStarter = false;
         for (var j = 0; j < starters.length; j++) { if (Number(starters[j]) === Number(pm)) isStarter = true; }
         if (!isStarter) out.push(pm);
     }
     return out;
 }
-function rbWrField(_inst, _other) {
-    var w = rbWrOne(_inst, _other), ov = rbSub.wrOverride;
+function rbWrField(_inst, _other, slot) {
+    var want = rbWrWant(_inst, _other, slot);
+    if (!(want >= 0)) return null;
     var arr = GetWithArray(107);
     for (var k in arr) {
         if (!arr.hasOwnProperty(k)) continue;
         var p = arr[k];
         if (!yyGetBool(p.gmloffense) || p.gmlte_keep === true || Number(p.gmlposition) !== 4) continue;
-        var pm = Number(p.gmlpmap);
-        if (pm >= 0 && ((w >= 0 && pm === Number(w)) || (ov !== null && pm === Number(ov)))) return p;
+        if (Number(p.gmlpmap) === want) return p;
     }
     return null;
 }
-function rbWrIsSlot(_inst, _other) {
+function rbWrIsSlot(_inst, _other) {   // returns 1 (WR1), 2 (WR2) or 0
     var pm = Number(_inst.gmlpmap);
-    if (!(pm >= 0)) return false;
-    var w = rbWrOne(_inst, _other);
-    return (w >= 0 && pm === Number(w)) || (rbSub.wrOverride !== null && pm === Number(rbSub.wrOverride));
+    if (!(pm >= 0)) return 0;
+    for (var s = 1; s <= 2; s++) { if (pm === rbWrWant(_inst, _other, s)) return s; }
+    return 0;
 }
 function rbWrApply(_inst, _other) {
     try {
-        if (rbSub.wrOverride === null) return;
+        if (rbSub.wrOverride === null && rbSub.wr2Override === null) return;
         if (!yyGetBool(_inst.gmloffense) || _inst.gmlte_keep === true || Number(_inst.gmlposition) !== 4) return;
         var cont = yyInst(_inst, _other, 104);
         if (cont.id !== rbSub.ctlId) return;
         if (Number(cont.gmlpossession) !== Number(cont.gmlhuman_team)) return;
         if (yyGetBool(cont.gmlkicking)) return;
-        var w = rbWrOne(_inst, _other);
-        if (!(w >= 0) || Number(_inst.gmlpmap) !== Number(w)) return;
-        var list = rbWrList(_inst, _other);
-        for (var i = 0; i < list.length; i++) {
-            if (Number(list[i]) === Number(rbSub.wrOverride)) { _inst.gmlpmap = list[i]; return; }
+        var pm = Number(_inst.gmlpmap);
+        for (var s = 1; s <= 2; s++) {
+            var ov = rbWrOv(s);
+            if (ov === null) continue;
+            var w = rbWrOne(_inst, _other, s);
+            if (!(w >= 0) || pm !== Number(w)) continue;
+            var list = rbWrList(_inst, _other, s);
+            for (var i = 0; i < list.length; i++) {
+                if (Number(list[i]) === Number(ov)) { _inst.gmlpmap = list[i]; return; }
+            }
+            return;
         }
     } catch (e) {}
 }
-// pages: 0 = RB, 1 = TE, 2 = WR1. Right arrow -> next page, left arrow -> previous page.
+// pages: 0 = RB, 1 = TE, 2 = WR1, 3 = WR2. Right arrow -> next page, left arrow -> previous page.
 function rbSubNext(_inst, _other, pg) {
-    if (pg === 0) return rbTeOk() ? 1 : (rbWrField(_inst, _other) ? 2 : -1);
-    if (pg === 1) return rbWrField(_inst, _other) ? 2 : -1;
+    if (pg === 0) return rbTeOk() ? 1 : (rbWrField(_inst, _other, 1) ? 2 : -1);
+    if (pg === 1) return rbWrField(_inst, _other, 1) ? 2 : -1;
+    if (pg === 2) return rbWrField(_inst, _other, 2) ? 3 : -1;
     return -1;
 }
-function rbSubPrev(pg) {
+function rbSubPrev(_inst, _other, pg) {
+    if (pg === 3) return rbWrField(_inst, _other, 1) ? 2 : (rbTeOk() ? 1 : 0);
     if (pg === 2) return rbTeOk() ? 1 : 0;
     if (pg === 1) return 0;
     return -1;
 }
 function rbSubFixPage(_inst, _other) {
+    if (rbSub.page === 3 && !rbWrField(_inst, _other, 2)) rbSub.page = 2;
+    if (rbSub.page === 2 && !rbWrField(_inst, _other, 1)) rbSub.page = rbTeOk() ? 1 : 0;
     if (rbSub.page === 1 && !rbTeOk()) rbSub.page = 0;
-    if (rbSub.page === 2 && !rbWrField(_inst, _other)) rbSub.page = rbTeOk() ? 1 : 0;
 }
 function rbSubGeom() {
     var gw = display_get_gui_width(), gh = display_get_gui_height(), cx = gw / 2;
@@ -341,7 +362,7 @@ function rbSubHit(_inst, _other, mx, my) {
     var g = rbSubGeom();
     if (mx >= g.bx1 - 4 && mx <= g.bx2 + 4 && my >= g.by1 - 4 && my <= g.by2 + 4) return 1;
     if (rbSub.open) {
-        if (rbSubPrev(rbSub.page) >= 0 && mx >= g.lx1 - 4 && mx <= g.lx2 + 4 && my >= g.py1 - 4 && my <= g.py2 + 4) return 3;
+        if (rbSubPrev(_inst, _other, rbSub.page) >= 0 && mx >= g.lx1 - 4 && mx <= g.lx2 + 4 && my >= g.py1 - 4 && my <= g.py2 + 4) return 3;
         if (rbSubNext(_inst, _other, rbSub.page) >= 0 && mx >= g.rx1 - 4 && mx <= g.rx2 + 4 && my >= g.py1 - 4 && my <= g.py2 + 4) return 4;
         if (mx >= g.cx1 && mx <= g.cx2 && my >= g.cy1 && my <= g.cy2) return 2;
     }
@@ -357,7 +378,7 @@ function rbSubTouch(_inst, _other, mx, my) {
             rbSub.hit = rbSubHit(_inst, _other, mx, my);
             if (rbSub.hit === 1) { rbSub.open = !rbSub.open; }
             else if (rbSub.hit === 2) { rbSubCycle(_inst, _other); }
-            else if (rbSub.hit === 3) { rbSub.page = rbSubPrev(rbSub.page); }
+            else if (rbSub.hit === 3) { rbSub.page = rbSubPrev(_inst, _other, rbSub.page); }
             else if (rbSub.hit === 4) { rbSub.page = rbSubNext(_inst, _other, rbSub.page); }
         }
         if (!down) rbSub.hit = 0;
@@ -371,9 +392,9 @@ function rbSubDraw(_inst, _other) {
         rbSubSync(_inst, _other);
         rbSubFixPage(_inst, _other);
         var pg = rbSub.page;
-        var lbl = pg === 2 ? "WR1" : (pg === 1 ? "TE" : "RB");
-        var lbl2 = pg === 2 ? "WR" : lbl;
-        var p = pg === 2 ? rbWrField(_inst, _other) : (pg === 1 ? rbTeField() : rbSubField());
+        var lbl = pg === 3 ? "WR2" : (pg === 2 ? "WR1" : (pg === 1 ? "TE" : "RB"));
+        var lbl2 = pg >= 2 ? "WR" : lbl;
+        var p = pg >= 2 ? rbWrField(_inst, _other, pg - 1) : (pg === 1 ? rbTeField() : rbSubField());
         if (!p || !(p.gmlpmap >= 0)) return;
         var g = rbSubGeom();
         var blue = make_color_rgb(40, 96, 176), dark = make_color_rgb(14, 30, 64), white = 16777215;
@@ -381,7 +402,7 @@ function rbSubDraw(_inst, _other) {
         draw_set_valign(1);
         draw_set_alpha(1);
         if (rbSub.open) {
-            var pm = p.gmlpmap, list = pg === 2 ? rbWrList(_inst, _other) : rbSubList(_inst, _other, pg === 1 ? 3 : 2), cur = 1;
+            var pm = p.gmlpmap, list = pg >= 2 ? rbWrList(_inst, _other, pg - 1) : rbSubList(_inst, _other, pg === 1 ? 3 : 2), cur = 1;
             for (var i = 0; i < list.length; i++) { if (Number(list[i]) === Number(pm)) { cur = i + 1; break; } }
             var mid = (g.cx1 + g.cx2) / 2;
             draw_rectangle_colour(g.cx1, g.cy1, g.cx2, g.cy2, dark, dark, dark, dark, 0);
@@ -408,7 +429,7 @@ function rbSubDraw(_inst, _other) {
             draw_set_colour(make_color_rgb(150, 175, 215));
             gml_Script_draw_hd_text(_inst, _other, mid, g.cy1 + 66, list.length > 1 ? "ON FIELD - TAP FOR NEXT " + lbl2 : "ON FIELD  -  NO BACKUP " + lbl2);
             var pym = (g.py1 + g.py2) / 2;
-            if (rbSubPrev(pg) >= 0) {
+            if (rbSubPrev(_inst, _other, pg) >= 0) {
                 var lxm = (g.lx1 + g.lx2) / 2;
                 draw_rectangle_colour(g.lx1, g.py1, g.lx2, g.py2, blue, blue, blue, blue, 0);
                 draw_rectangle_colour(g.lx1, g.py1, g.lx2, g.py2, white, white, white, white, 1);
