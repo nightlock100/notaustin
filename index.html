@@ -113,6 +113,54 @@
                 padding: 15px 0;
             }
         }
+
+        /* ===== Fullscreen button ===== */
+        #rb-fs-btn {
+            position: fixed;
+            top: 8px;
+            right: 8px;
+            z-index: 20;
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.55);
+            border: 2px solid #ffffff;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0.55;
+            transition: opacity 0.2s ease, top 0.5s ease, transform 0.1s ease;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        #rb-fs-btn:hover { opacity: 1; }
+        #rb-fs-btn:active { transform: scale(0.92); }
+        #rb-fs-btn svg { width: 22px; height: 22px; display: block; pointer-events: none; }
+        /* Slide down out of the way while the Enter-key navbar is showing */
+        #rb-fs-btn.navbar-open { top: 78px; }
+
+        /* Fullscreen: fill the whole screen with the game */
+        #gm4html5_div_id:fullscreen { width: 100vw; height: 100vh; background: #000; }
+        #gm4html5_div_id:-webkit-full-screen { width: 100vw; height: 100vh; background: #000; }
+        #gm4html5_div_id:fullscreen canvas { width: 100% !important; height: 100% !important; }
+        #gm4html5_div_id:-webkit-full-screen canvas { width: 100% !important; height: 100% !important; }
+
+        /* Fallback for browsers with no Fullscreen API (iPhone Safari) */
+        #gm4html5_div_id.pseudo-fs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            z-index: 9999;
+            background: #000;
+        }
+        #gm4html5_div_id.pseudo-fs canvas { width: 100% !important; height: 100% !important; }
+        html.rb-pseudo-fs, html.rb-pseudo-fs body { overflow: hidden; }
     </style>
 
     <title>Home | Schoology</title>
@@ -221,6 +269,104 @@ document.addEventListener('keydown', function(event) {
     });
 
 
+    </script>
+
+    <!-- Fullscreen button (separate script block so the other scripts can't break it) -->
+    <script>
+    (function () {
+        var root = document.getElementById('gm4html5_div_id');
+        var header = document.querySelector('header');
+        if (!root) return;
+
+        var ICON_ENTER = '<svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="square"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></svg>';
+        var ICON_EXIT  = '<svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="square"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></svg>';
+
+        var btn = document.createElement('button');
+        btn.id = 'rb-fs-btn';
+        btn.type = 'button';
+        btn.tabIndex = -1;            // so Enter/Space never "click" it by accident
+        root.appendChild(btn);        // inside the root so it stays visible in fullscreen
+
+        function fsElement() {
+            return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
+        }
+        function isPseudo() { return root.classList.contains('pseudo-fs'); }
+        function isFull() { return fsElement() === root || isPseudo(); }
+
+        // Tell the game the window size changed so it re-measures the canvas
+        function nudge() {
+            window.dispatchEvent(new Event('resize'));
+            setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 150);
+        }
+
+        function render() {
+            var full = isFull();
+            btn.innerHTML = full ? ICON_EXIT : ICON_ENTER;
+            var label = full ? 'Exit fullscreen' : 'Fullscreen';
+            btn.title = label;
+            btn.setAttribute('aria-label', label);
+        }
+
+        function setPseudo(on) {
+            root.classList.toggle('pseudo-fs', on);
+            document.documentElement.classList.toggle('rb-pseudo-fs', on);
+            render();
+            nudge();
+        }
+
+        function enter() {
+            var req = root.requestFullscreen || root.webkitRequestFullscreen || root.msRequestFullscreen;
+            if (!req) { setPseudo(true); return; }
+            try {
+                var p = req.call(root, { navigationUI: 'hide' });
+                if (p && p.catch) p.catch(function () { setPseudo(true); });
+            } catch (e) {
+                setPseudo(true);
+            }
+        }
+
+        function exit() {
+            if (isPseudo()) { setPseudo(false); return; }
+            var ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+            if (ex) { try { ex.call(document); } catch (e) {} }
+        }
+
+        function toggle() { if (isFull()) { exit(); } else { enter(); } }
+
+        // Keep presses on the button from also reaching the game as a click/tap
+        ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend'].forEach(function (type) {
+            btn.addEventListener(type, function (e) {
+                e.stopPropagation();
+                if (type === 'mousedown') e.preventDefault();   // don't steal keyboard focus from the game
+            }, { passive: false });
+        });
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggle();
+            btn.blur();
+        });
+
+        ['fullscreenchange', 'webkitfullscreenchange', 'MSFullscreenChange'].forEach(function (type) {
+            document.addEventListener(type, function () { render(); nudge(); });
+        });
+
+        // Esc already exits real fullscreen; handle it for the fallback mode too
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && isPseudo()) setPseudo(false);
+        });
+
+        // Slide the button below the navbar while the Enter-key navbar is open
+        if (header && window.MutationObserver) {
+            var sync = function () {
+                btn.classList.toggle('navbar-open', header.style.transform === 'translateY(0px)');
+            };
+            new MutationObserver(sync).observe(header, { attributes: true, attributeFilter: ['style'] });
+            sync();
+        }
+
+        render();
+    })();
     </script>
 </body>
 </html>
