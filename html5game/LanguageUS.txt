@@ -625,7 +625,7 @@ injurytype_9	Calf
 injurytype_10	Ankle
 injurytype_11	Foot
 ui_SkipTutorial	Skip Tutorial
-ui_Credits	Design & Code by Simon Read      ***      Art by  Savage @pixelnfl      ***      Music by Heatley Bros      ***      Special thanks to John Holden, @MrSpecialK_, Will Thompson and Five Aces      ***      Also a huge thank you to all the league organizers and players!
+ui_Credits	Original Game By Retro's Bowl's Devs.      *****        Mod made by Braden and Claude AI lmaoooo
 match_TooLow	Too Low
 match_Doink	Doink
 ui_WeatherFX	Weather FX
@@ -908,18 +908,18 @@ msg_ExhibitionCantCopyUniforms	You can use your Star Players and your customized
 msg_UnlimitedFeatures	Upgrade to the unlimited version now!##* Get 25 coaching credits *#* Edit team names and uniforms *#* Edit player names *#* Snow and rain weather effects *#* Kickoff Returns *#* Support development! *
 ui_Upgrade	Upgrade
 ui_Difficulty	Difficulty
-ui_Difficulty0	silly
-ui_Difficulty1	light work
-ui_Difficulty2	less light
-ui_Difficulty3	normal
-ui_Difficulty4	spicy
-ui_Easy	light work
-ui_Medium	less light
-ui_Hard	normal
-ui_Dynamic	silly
+ui_Difficulty0	Dynamic
+ui_Difficulty1	Easy
+ui_Difficulty2	Medium
+ui_Difficulty3	Hard
+ui_Difficulty4	Extreme
+ui_Easy	Easy
+ui_Medium	Medium
+ui_Hard	Hard
+ui_Dynamic	Dynamic
 tla_NetPoints	Net
 tla_Percentage	Pct
-info_Options_Difficulty	When set to SILLY the game difficulty will adjust automatically, getting harder when you win games or easier if you lose. The EXTREME setting makes all opponents play with a 5 star rating regardless of what their actual rating is.
+info_Options_Difficulty	When set to Dyanmic the game difficulty will adjust automatically, getting harder when you win games or easier if you lose. The EXTREME setting makes all opponents play with a 5 star rating regardless of what their actual rating is.
 ui_Save	Save
 ui_ReturnToLoad	Return To#Load Screen
 ui_PlayerHallOfFame	the real ones
