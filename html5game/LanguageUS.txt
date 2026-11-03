@@ -263,7 +263,7 @@ position_OL	Offensive Lineman
 position_TE	Tight End
 position_RB	Running Back
 position_WR	Wide Receiver
-position_DL	Defensive Lineman
+position_DL	Defensive Tackle
 position_LB	Linebacker
 position_SF	Safety
 position_CB	Corner Back
@@ -342,7 +342,7 @@ info_OL	Offensive linemen protect the quarterback. The stronger your offensive l
 info_TE	A tight end lines up near the end of your offensive line. They will either contribute to blocking or make a run.
 info_RB	A running back can receive the ball from the quarterback and attempt to run through or around the defensive line.
 info_WR	Wide receivers line up near the sidelines and will normally make deep runs in order to receive a long pass from the quarterback.
-info_DL	A defensive linemen will attempt to tackle the quarterback and block runs from the running back.
+info_DT	A defensive linemen will attempt to tackle the quarterback and block runs from the running back.
 info_LB	Linebackers line up behind the defensive linemen. They will either attempt to cover receivers or press forward to stop running backs.
 info_SF	Safeties sit deep in the backfield covering receivers.
 info_CB	Corner backs line up opposite wide receivers and attemp to stop them catching the ball.
