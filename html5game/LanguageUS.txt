@@ -246,7 +246,7 @@ ui_driveLeft	Left
 ui_driveRight	Right
 ui_driveBoth	Both
 pos_QB	QB
-pos_OL	OL
+pos_OL	IOL
 pos_TE	TE
 pos_RB	RB
 pos_WR	WR
@@ -333,16 +333,16 @@ msg_SkipDraft	You still have $num picks left.##Do you want to sell your picks in
 msg_SkipDraft1	You still have a pick left in this round.##Do you want to sell it for $value coach credits?
 ui_NoMorePicks	You don't have any picks left.
 ui_NoMorePicksToTrade	You don't have a $num round pick for next season's draft to trade.
-ui_Rookie	young bull
+ui_Rookie	Rookie
 ui_StarPlayers	Star Players
 ui_Details	Details
 ui_Attributes	Attributes
 info_QB	Quarterbacks receive the ball from the snap and either hand it off to a running back or throw it to a receiver.
-info_OL	Offensive linemen protect the quarterback. The stronger your offensive line the more time your quarterback has to make a throw.
+info_IOL	Offensive linemen protect the quarterback. The stronger your offensive line the more time your quarterback has to make a throw.
 info_TE	A tight end lines up near the end of your offensive line. They will either contribute to blocking or make a run.
 info_RB	A running back can receive the ball from the quarterback and attempt to run through or around the defensive line.
 info_WR	Wide receivers line up near the sidelines and will normally make deep runs in order to receive a long pass from the quarterback.
-info_DT	A defensive linemen will attempt to tackle the quarterback and block runs from the running back.
+info_DT	A defensive tackle will attempt to tackle the quarterback and block runs from the running back.
 info_LB	Linebackers line up behind the defensive linemen. They will either attempt to cover receivers or press forward to stop running backs.
 info_SF	Safeties sit deep in the backfield covering receivers.
 info_CB	Corner backs line up opposite wide receivers and attemp to stop them catching the ball.
@@ -1004,10 +1004,10 @@ ui_TrainingLight	wussy
 ui_TrainingNormal	normal
 ui_TrainingHard	concentracion camp
 info_TrainingRegime	Setting the training regime to HARD will help players to gain more XP per game. However they will consume more energy, be less happy and their risk of injury is increased.##LIGHT training conserves energy, increases morale and reduces injury risk but XP will be gained at a slower rate than normal.
-news_mvp	$position $playername won the league award for him award!
-news_roty	$position $playername won the league award for young bull of the Year!
-news_opoy	$position $playername won the league award for heisman!
-news_dpoy	$position $playername won the league award for heisman (d)!
+news_mvp	$position $playername won the league award for MVP!
+news_roty	$position $playername won the league award for Rookie of the Year!
+news_opoy	$position $playername won the league award for Offensive Player of the Year!
+news_dpoy	$position $playername won the league award for Defensive Player of the Year!
 ui_SeasonRatings	Season Ratings
 msg_SeasonRatings	A fan poll rated the performance of your team for the season...
 rating_Incredible	give him a bag
@@ -1042,10 +1042,10 @@ ui_SnowFall	Snow Fall
 ui_Roof	Roof
 ui_ExtraDetails	Extra Details
 btn_EndZone	End#Zone
-tla_MVP	him award
-tla_ROTY	YBOTY
-tla_DPOY	HEI-D
-tla_OPOY	HEI-O
+tla_MVP	MVP
+tla_ROTY	ROTY
+tla_DPOY	DPOY
+tla_OPOY	OPOY
 Rings	Rings
 msg_TradeDeadline	The trade deadline is this week.##From next week on, you will only be able to cut players from the team, not trade them away, until next season. You will still be able to hire players from the Free Agents list.
 news_ConferenceChamps	$teamname are the $conference champions!
@@ -1375,8 +1375,8 @@ btn_GenerateCharacter	Random#Character
 msg_NeedBossHead	You need to select a face for yourself.##Tap on the head coach card to choose an image.
 info_HeadCoach	This is you! Your morale is affected by team morale and fan approval. Your star rating will increase with victories!
 ui_RetroBowlRecord	Retro Bowl Record
-tla_RBMVP	hero
-msg_RetroBowlMVPWinner	$playername was named the hero!
+tla_RBMVP	SBMVP
+msg_RetroBowlMVPWinner	$playername was named the Super Bowl MVP!
 btn_Achievements	Achieve-#ments
 ui_RetroBowlWinners	Retro Bowl Winners
 match_SkipTime	Skip Time
@@ -1432,3 +1432,4 @@ aa_info_StartWithFave	Retro Bowl+ is a game all about building a legacy. If you 
 ui_NoOffers	No Offers
 ui_OneOffer	1 Offer
 ui_Offers	Offers
+info_DL	Edge rushers start on the edge of the defensive line. They bend around tackles to sack the QB.
