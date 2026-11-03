@@ -90,6 +90,13 @@ var RB_FAT_SNAP = 2;        // fatigue gained each play he is on the field
 var RB_FAT_QB_TOUCH = 1;   // QB: extra fatigue per pass attempt or scramble (much lower than RB/WR touches)
 var RB_FAT_TOUCH = 7;       // extra fatigue per carry or catch
 var RB_FAT_REST = 4;        // fatigue recovered each play he sits on the bench
+var RB_FAT_GLOBAL = 0.6;    // overall fatigue-gain reduction (1 = old speed, lower = slower fatigue)
+function rbFatStamMult(pm) {   // stamina 1-10: higher stamina = less fatigue gained per play
+    var sta = rbNum(pm, "stamina");
+    if (!(sta > 0)) sta = 5;
+    sta = Math.min(10, Math.max(1, sta));
+    return RB_FAT_GLOBAL * Math.min(1.4, Math.max(0.5, 1.5 - 0.1 * sta));
+}
 var RB_FAT_MAXNERF = 0.30;  // at 100% fatigue: -30% speed and strength
 var rbFat = { ctlId: null, rec: {} };
 function rbFatRec(cont, pm) {
@@ -136,9 +143,10 @@ function rbFatigueApply(_inst, _other) {
             for (var i = 0; i < list.length; i++) {
                 var r = rbFatRec(cont, list[i]);
                 var tc = rbNum(list[i], "stat_rush_attempts") + rbNum(list[i], "stat_attempts");
-                r.f += (isQb ? RB_FAT_QB_TOUCH : RB_FAT_TOUCH) * Math.max(0, tc - r.touches);
+                var sm = rbFatStamMult(list[i]);
+                r.f += (isQb ? RB_FAT_QB_TOUCH : RB_FAT_TOUCH) * Math.max(0, tc - r.touches) * sm;
                 r.touches = tc;
-                if (Number(list[i]) === Number(pm)) r.f += RB_FAT_SNAP; else r.f -= RB_FAT_REST;
+                if (Number(list[i]) === Number(pm)) r.f += RB_FAT_SNAP * sm; else r.f -= RB_FAT_REST;
                 r.f = Math.min(100, Math.max(0, r.f));
             }
         }
