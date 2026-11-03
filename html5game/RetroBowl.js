@@ -29,7 +29,27 @@ function rbNum(pmap, key) {
     var n = Number(ds_map_find_value(pmap, key));
     return isFinite(n) ? n : 0;
 }
+function rbDrawNameFit(_inst, _other, x, y, txt) {
+    txt = string(txt);
+    var w = gml_Script_string_hd_width(_inst, _other, txt);
+    var maxW = 72;
+    if (!(w > maxW)) { gml_Script_draw_hd_text(_inst, _other, x, y, txt); return; }
+    var s = maxW / w;
+    var base = global.gmlhd_fonts ? 0.25 : 1;
+    draw_text_transformed(x, y + (1 - s) * 3, txt, base * s, base * s, 0);
+}
+function rbHasStats(pm) {
+    var ks = ["stat_attempts", "stat_complete", "stat_yards", "stat_touchdowns", "stat_rush_attempts", "stat_rush_yards", "stat_rush_touchdowns", "stat_tackles", "stat_sacks", "stat_int", "stat_fumbles", "stat_return_attempts"];
+    for (var i = 0; i < ks.length; i++) { if (rbNum(pm, ks[i]) > 0) return true; }
+    return false;
+}
 function rbLiveStatLine(pmap) {
+    var s = rbLiveStatLineBase(pmap);
+    var fum = rbNum(pmap, "stat_fumbles");
+    if (s !== "" && fum > 0) s += "  " + fum + " FUM";
+    return s;
+}
+function rbLiveStatLineBase(pmap) {
     if (!(pmap >= 0)) return "";
     var pos = rbNum(pmap, "position");
     var yds = Math.round(rbNum(pmap, "stat_yards"));
@@ -48,10 +68,10 @@ function rbLiveStatLine(pmap) {
     if (pos === 2) { // RB: carries, yds, total TDs, (rec + yds only if he has a catch)
         var car = rbNum(pmap, "stat_rush_attempts");
         var ryds = Math.round(rbNum(pmap, "stat_rush_yards"));
-        var rbTd = tds + rbNum(pmap, "stat_rush_touchdowns") + rbNum(pmap, "stat_return_tds");
+        var rbTd = rbNum(pmap, "stat_rush_touchdowns") + rbNum(pmap, "stat_return_tds");
         var s = car + " CAR  " + ryds + " YDS  " + rbTd + " TD";
         var rrec = rbNum(pmap, "stat_attempts");
-        if (rrec > 0) s += "  |  " + rrec + " REC  " + yds + " YDS";
+        if (rrec > 0) s += "  |  " + rrec + " REC  " + yds + " YDS  " + tds + " TD";
         return s;
     }
     return "";
@@ -83,7 +103,7 @@ function rbCreditMiss(_inst, _other, code) {
     } catch (e) {}
 }
 // ---- Presnap RB sub menu: small arrow button -> RB player card -> tap card to sub in the next RB ----
-var rbSub = { open: false, snapKey: -1, ctlId: null, override: null, teOverride: null, wrOverride: null, wr2Override: null, wr3Override: null, qbOverride: null, page: 0, wasDown: false, hit: 0, cycling: false };
+var rbSub = { open: false, snapKey: -1, ctlId: null, override: null, teOverride: null, wrOverride: null, wr2Override: null, wr3Override: null, qbOverride: null, rb2Override: null, page: 0, wasDown: false, hit: 0, cycling: false, fOpen: false, fIdx: 0 };
 
 // ---- RB in-game fatigue: tracked per player per game, applied as a real speed/strength nerf ----
 var RB_FAT_SNAP = 2;        // fatigue gained each play he is on the field
@@ -126,9 +146,9 @@ function rbFatQuarter(cont) {   // quarter-break recovery: -10 pts after Q1, Q3 
 function rbFatigueApply(_inst, _other) {
     try {
         if (!yyGetBool(_inst.gmloffense)) return;
-        var wr = _inst.gmlte_keep !== true && Number(_inst.gmlposition) === 4 && rbWrIsSlot(_inst, _other);
+        var wr = _inst.gmlte_keep !== true && !_inst.rbRb2 && Number(_inst.gmlposition) === 4 && rbWrIsSlot(_inst, _other);
         var isQb = Number(_inst.gmlinum) === 1;
-        if (!(Number(_inst.gmlinum) === 2 || isQb || _inst.gmlte_keep === true || wr)) return;
+        if (!(Number(_inst.gmlinum) === 2 || isQb || _inst.gmlte_keep === true || wr || _inst.rbRb2)) return;
         var cont = yyInst(_inst, _other, 104);
         if (Number(cont.gmlpossession) !== Number(cont.gmlhuman_team)) return;
         if (yyGetBool(cont.gmlkicking)) return;
@@ -176,9 +196,9 @@ function rbSubAvailable(_inst, _other) {
 }
 function rbSubSync(_inst, _other) {
     var cont = yyInst(_inst, _other, 104);
-    if (rbSub.ctlId !== cont.id) { rbSub.ctlId = cont.id; rbSub.override = null; rbSub.teOverride = null; rbSub.wrOverride = null; rbSub.wr2Override = null; rbSub.wr3Override = null; rbSub.qbOverride = null; rbSub.page = 0; rbSub.snapKey = -1; rbSub.open = false; }
+    if (rbSub.ctlId !== cont.id) { rbSub.ctlId = cont.id; rbSub.override = null; rbSub.teOverride = null; rbSub.wrOverride = null; rbSub.wr2Override = null; rbSub.wr3Override = null; rbSub.qbOverride = null; rbSub.rb2Override = null; rbSub.page = 0; rbSub.snapKey = -1; rbSub.open = false; }
     var sk = Number(cont.gmlsnaps);
-    if (rbSub.snapKey !== sk) { rbSub.snapKey = sk; rbSub.open = false; }
+    if (rbSub.snapKey !== sk) { rbSub.snapKey = sk; rbSub.open = false; rbSub.fOpen = false; }
 }
 function rbSubList(_inst, _other, pos) {
     if (pos === undefined) pos = 2;
@@ -211,9 +231,98 @@ function rbTeField() {
     for (var k in arr) {
         if (!arr.hasOwnProperty(k)) continue;
         var p = arr[k];
-        if (yyGetBool(p.gmloffense) && p.gmlte_keep === true) return p;
+        if (yyGetBool(p.gmloffense) && p.gmlte_keep === true && !p.rbHid) return p;
     }
     return null;
+}
+function rbHandoffPick(p) {
+    try {
+        var arr = GetWithArray(107);
+        for (var k in arr) {
+            if (!arr.hasOwnProperty(k)) continue;
+            var q = arr[k];
+            if (yyGetBool(q.gmloffense) && q.id !== p.id && Number(q.gmlposition) === 2) q.gmlposition = 4;
+        }
+        p.gmlposition = 2;
+    } catch (e) {}
+}
+function rbRb2Field() {
+    var arr = GetWithArray(107);
+    for (var k in arr) {
+        if (!arr.hasOwnProperty(k)) continue;
+        var p = arr[k];
+        if (yyGetBool(p.gmloffense) && p.rbRb2 && p.gmlpmap >= 0) return p;
+    }
+    return null;
+}
+function rbPageList(_inst, _other, pg) {
+    var list = rbSubList(_inst, _other, pg === 9 ? 1 : (pg === 1 ? 3 : 2));
+    if (rbSub.fIdx === 1 && (pg === 0 || pg === 10)) {
+        var o = pg === 10 ? rbSubField() : rbRb2Field();
+        if (o && o.gmlpmap >= 0) list = list.filter(function (x) { return Number(x) !== Number(o.gmlpmap); });
+    }
+    return list;
+}
+function rbRb2Pick(_inst, _other) {
+    try {
+        var rb1 = rbSubField();
+        var cur = rb1 ? Number(rb1.gmlpmap) : -1;
+        if (rbSub.rb2Override !== null && Number(rbSub.rb2Override) !== cur) return rbSub.rb2Override;
+        var list = rbSubList(_inst, _other);
+        for (var i = 0; i < list.length; i++) { if (Number(list[i]) !== cur) return list[i]; }
+    } catch (e) {}
+    return null;
+}
+function rbDualSync(_inst, _other) {
+    try {
+        var cont = yyInst(_inst, _other, 104);
+        var rbN = rbSubField();
+        if (rbN) {
+            if (yyGetBool(rbN.gmlpmap)) rbN.gmlpos_name3 = string_copy(ds_map_find_value(rbN.gmlpmap, "fname"), 1, 1) + "." + string_copy(ds_map_find_value(rbN.gmlpmap, "lname"), 1, 1);
+            else rbN.gmlpos_name3 = "";
+        }
+        var arr = GetWithArray(107);
+        for (var k in arr) {
+            if (!arr.hasOwnProperty(k)) continue;
+            var p = arr[k];
+            if (!yyGetBool(p.gmloffense)) continue;
+            if (yyGetBool(p.gmlpmap) && (p.rbRb2 || p.gmlte_keep === true)) p.gmlpos_name3 = string_copy(ds_map_find_value(p.gmlpmap, "fname"), 1, 1) + "." + string_copy(ds_map_find_value(p.gmlpmap, "lname"), 1, 1);
+            if (rbSub.fIdx === 1 && p.gmlte_keep === true) {
+                var rb1 = rbSubField();
+                if (!rb1) return;
+                p.rbSave = { x: p.x, y: p.y, pos: p.gmlposition, blk: p.gmlte_blocking, route: p.gmlmy_route, rname: p.gmlmy_route_name };
+                p.gmlte_keep = false; p.rbRb2 = true; p.gmlposition = 4; p.gmlte_blocking = false;
+                var sc = Number(cont.gmly_scrim), d = Number(rb1.y) - sc;
+                p.x = rb1.x; p.y = Math.abs(d) < 8 ? sc + 45 : sc - d;
+                p.gmlmy_route = path_duplicate([14, 15, 17, 19][Math.floor(Math.random() * 4)]); p.gmlmy_route_name = "route_fb_1";
+                if (Number(p.gmlfacing) === -1) { path_mirror(p.gmlmy_route); path_shift(p.gmlmy_route, -path_get_x(p.gmlmy_route, 0), 0); }
+                p.gmlmy_route_startx = p.x; p.gmlmy_route_starty = p.y;
+                rbSub.cycling = true;
+                try { gml_Script_s_set_skills_and_skin(p, cont); } finally { rbSub.cycling = false; }
+            } else if (rbSub.fIdx === 1 && p.rbRb2) {
+                var rbA = rbSubField();
+                if (rbA && Number(p.gmlanim) !== Number(rbA.gmlanim)) gml_Script_s_set_anim(p, cont, rbA.gmlanim);
+            } else if (rbSub.fIdx === 0 && p.rbRb2) {
+                p.rbRb2 = false; p.gmlte_keep = true;
+                p.x = p.rbSave.x; p.y = p.rbSave.y; p.gmlmy_route_startx = p.x; p.gmlmy_route_starty = p.y; p.gmlposition = p.rbSave.pos; p.gmlte_blocking = p.rbSave.blk; p.gmlmy_route = p.rbSave.route; p.gmlmy_route_name = p.rbSave.rname;
+                rbSub.cycling = true;
+                try { gml_Script_s_set_skills_and_skin(p, cont); } finally { rbSub.cycling = false; }
+            }
+        }
+    } catch (e) {}
+}
+function rbRestoreTE() {
+    try {
+        var t = rbSub.teHid;
+        // handled by rbDualSync
+        rbSub.teHid = null;
+    } catch (e) {}
+}
+function rbRemoveTE(_inst, _other) {
+    try {
+        var t = rbTeField();
+        // handled by rbDualSync
+    } catch (e) {}
 }
 function rbTeOk() {
     var t = rbTeField();
@@ -222,18 +331,19 @@ function rbTeOk() {
 function rbSubCycle(_inst, _other) {
     var pg = rbSub.page;
     var isWr = pg >= 2 && pg <= 4;
-    var list = isWr ? rbWrList(_inst, _other, pg - 1) : rbSubList(_inst, _other, pg === 9 ? 1 : (pg === 1 ? 3 : 2));
-    var p = isWr ? rbWrField(_inst, _other, pg - 1) : (pg === 9 ? rbQbField() : (pg === 1 ? rbTeField() : rbSubField()));
+    var list = isWr ? rbWrList(_inst, _other, pg - 1) : rbPageList(_inst, _other, pg);
+    var p = isWr ? rbWrField(_inst, _other, pg - 1) : (pg === 9 ? rbQbField() : (pg === 1 ? rbTeField() : (pg === 10 ? rbRb2Field() : rbSubField())));
     if (!p || list.length < 2) return;
     var cur = 0;
     for (var i = 0; i < list.length; i++) { if (Number(list[i]) === Number(p.gmlpmap)) { cur = i; break; } }
     var nxt = list[(cur + 1) % list.length];
-    if (pg === 9) rbSub.qbOverride = nxt; else if (pg === 4) rbSub.wr3Override = nxt; else if (pg === 3) rbSub.wr2Override = nxt; else if (pg === 2) rbSub.wrOverride = nxt; else if (pg === 1) rbSub.teOverride = nxt; else rbSub.override = nxt;
+    if (pg === 9) rbSub.qbOverride = nxt; else if (pg === 4) rbSub.wr3Override = nxt; else if (pg === 3) rbSub.wr2Override = nxt; else if (pg === 2) rbSub.wrOverride = nxt; else if (pg === 1) rbSub.teOverride = nxt; else if (pg === 10) rbSub.rb2Override = nxt; else rbSub.override = nxt;
     rbSub.cycling = true;
     try { gml_Script_s_set_skills_and_skin(p, yyInst(_inst, _other, 104)); } finally { rbSub.cycling = false; }
 }
 function rbSubApply(_inst, _other) {
     try {
+        if (_inst.rbRb2) { var pm2 = rbRb2Pick(_inst, _other); _inst.gmlpmap = (pm2 !== null) ? pm2 : -4; return; }
         if (rbSub.override === null) return;
         if (!yyGetBool(_inst.gmloffense) || Number(_inst.gmlinum) !== 2) return;
         var cont = yyInst(_inst, _other, 104);
@@ -388,13 +498,20 @@ function rbQbApply(_inst, _other) {
 // pages: 9 = QB, 0 = RB, 1 = TE, 2 = WR1, 3 = WR2, 4 = WRS. Right arrow -> next page, left arrow -> previous page.
 function rbSubNext(_inst, _other, pg) {
     if (pg === 9) return 0;
-    if (pg === 0) return rbTeOk() ? 1 : (rbWrField(_inst, _other, 1) ? 2 : -1);
+    if (pg === 0 && rbRb2Field()) return 10;
+    if (pg === 0 || pg === 10) return rbTeOk() ? 1 : (rbWrField(_inst, _other, 1) ? 2 : -1);
     if (pg === 1) return rbWrField(_inst, _other, 1) ? 2 : -1;
     if (pg === 2) return rbWrField(_inst, _other, 2) ? 3 : -1;
     if (pg === 3) return rbWrField(_inst, _other, 3) ? 4 : -1;
     return -1;
 }
 function rbSubPrev(_inst, _other, pg) {
+    if (pg === 10) return 0;
+    var r = rbSubPrev0(_inst, _other, pg);
+    if (r === 0 && pg !== 0 && rbRb2Field()) return 10;
+    return r;
+}
+function rbSubPrev0(_inst, _other, pg) {
     if (pg === 4) return rbWrField(_inst, _other, 2) ? 3 : (rbWrField(_inst, _other, 1) ? 2 : (rbTeOk() ? 1 : 0));
     if (pg === 3) return rbWrField(_inst, _other, 1) ? 2 : (rbTeOk() ? 1 : 0);
     if (pg === 2) return rbTeOk() ? 1 : 0;
@@ -403,6 +520,7 @@ function rbSubPrev(_inst, _other, pg) {
     return -1;
 }
 function rbSubFixPage(_inst, _other) {
+    if (rbSub.page === 10 && !rbRb2Field()) rbSub.page = 0;
     if (rbSub.page === 9 && !rbQbField()) rbSub.page = 0;
     if (rbSub.page === 4 && !rbWrField(_inst, _other, 3)) rbSub.page = 3;
     if (rbSub.page === 3 && !rbWrField(_inst, _other, 2)) rbSub.page = 2;
@@ -417,11 +535,15 @@ function rbSubGeom() {
     g.py1 = midY - 14; g.py2 = midY + 14;
     g.lx2 = g.cx1 - 4; g.lx1 = g.lx2 - 16;   // left arrow box
     g.rx1 = g.cx2 + 4; g.rx2 = g.rx1 + 16;   // right arrow box
+    g.sx2 = gw - 5; g.sx1 = g.sx2 - 14; g.sy1 = gh / 2 - 14; g.sy2 = gh / 2 + 14;   // right-side middle button
+    g.fx2 = g.sx1 - 4; g.fx1 = g.fx2 - 120; g.fy1 = gh / 2 - 23; g.fy2 = gh / 2 + 23;   // formation card box
     return g;
 }
 function rbSubHit(_inst, _other, mx, my) {
     var g = rbSubGeom();
     if (mx >= g.bx1 - 4 && mx <= g.bx2 + 4 && my >= g.by1 - 4 && my <= g.by2 + 4) return 1;
+    if (mx >= g.sx1 - 4 && mx <= g.sx2 + 4 && my >= g.sy1 - 4 && my <= g.sy2 + 4) return 5;
+    if (rbSub.fOpen && mx >= g.fx1 && mx <= g.fx2 && my >= g.fy1 && my <= g.fy2) return 6;
     if (rbSub.open) {
         if (rbSubPrev(_inst, _other, rbSub.page) >= 0 && mx >= g.lx1 - 4 && mx <= g.lx2 + 4 && my >= g.py1 - 4 && my <= g.py2 + 4) return 3;
         if (rbSubNext(_inst, _other, rbSub.page) >= 0 && mx >= g.rx1 - 4 && mx <= g.rx2 + 4 && my >= g.py1 - 4 && my <= g.py2 + 4) return 4;
@@ -435,9 +557,12 @@ function rbSubTouch(_inst, _other, mx, my) {
         if (!rbSubAvailable(_inst, _other)) { rbSub.open = false; rbSub.hit = 0; rbSub.wasDown = down; return false; }
         rbSubSync(_inst, _other);
         rbSubFixPage(_inst, _other);
+        rbDualSync(_inst, _other);
         if (down && !rbSub.wasDown) {
             rbSub.hit = rbSubHit(_inst, _other, mx, my);
-            if (rbSub.hit === 1) { rbSub.open = !rbSub.open; }
+            if (rbSub.hit === 1) { rbSub.open = !rbSub.open; rbSub.fOpen = false; }
+            else if (rbSub.hit === 5) { rbSub.fOpen = !rbSub.fOpen; rbSub.open = false; }
+            else if (rbSub.hit === 6) { rbSub.fIdx = 1 - rbSub.fIdx; if (rbSub.fIdx === 1) rbRemoveTE(_inst, _other); else rbRestoreTE(); if (rbSub.fIdx === 1) rbRemoveTE(_inst, _other); else rbRestoreTE(); }
             else if (rbSub.hit === 2) { rbSubCycle(_inst, _other); }
             else if (rbSub.hit === 3) { rbSub.page = rbSubPrev(_inst, _other, rbSub.page); }
             else if (rbSub.hit === 4) { rbSub.page = rbSubNext(_inst, _other, rbSub.page); }
@@ -454,9 +579,9 @@ function rbSubDraw(_inst, _other) {
         rbSubFixPage(_inst, _other);
         var pg = rbSub.page;
         var isWr = pg >= 2 && pg <= 4;
-        var lbl = pg === 9 ? "QB" : (pg === 4 ? "WRS" : (pg === 3 ? "WR2" : (pg === 2 ? "WR1" : (pg === 1 ? "TE" : "RB"))));
+        var lbl = pg === 9 ? "QB" : (pg === 4 ? "WRS" : (pg === 3 ? "WR2" : (pg === 2 ? "WR1" : (pg === 1 ? "TE" : (pg === 10 ? "RB2" : (rbSub.fIdx === 1 ? "RB1" : "RB"))))));
         var lbl2 = isWr ? "WR" : lbl;
-        var p = isWr ? rbWrField(_inst, _other, pg - 1) : (pg === 9 ? rbQbField() : (pg === 1 ? rbTeField() : rbSubField()));
+        var p = isWr ? rbWrField(_inst, _other, pg - 1) : (pg === 9 ? rbQbField() : (pg === 1 ? rbTeField() : (pg === 10 ? rbRb2Field() : rbSubField())));
         if (!p || !(p.gmlpmap >= 0)) return;
         var g = rbSubGeom();
         var blue = make_color_rgb(40, 96, 176), dark = make_color_rgb(14, 30, 64), white = 16777215;
@@ -464,7 +589,7 @@ function rbSubDraw(_inst, _other) {
         draw_set_valign(1);
         draw_set_alpha(1);
         if (rbSub.open) {
-            var pm = p.gmlpmap, list = isWr ? rbWrList(_inst, _other, pg - 1) : rbSubList(_inst, _other, pg === 9 ? 1 : (pg === 1 ? 3 : 2)), cur = 1;
+            var pm = p.gmlpmap, list = isWr ? rbWrList(_inst, _other, pg - 1) : rbPageList(_inst, _other, pg), cur = 1;
             for (var i = 0; i < list.length; i++) { if (Number(list[i]) === Number(pm)) { cur = i + 1; break; } }
             var mid = (g.cx1 + g.cx2) / 2;
             draw_rectangle_colour(g.cx1, g.cy1, g.cx2, g.cy2, dark, dark, dark, dark, 0);
@@ -518,6 +643,25 @@ function rbSubDraw(_inst, _other) {
         var ax = (g.bx1 + g.bx2) / 2, ay = (g.by1 + g.by2) / 2, d = rbSub.open ? -1 : 1;
         draw_line_width(ax - 6, ay + 3 * d, ax, ay - 3 * d, 2);
         draw_line_width(ax, ay - 3 * d, ax + 6, ay + 3 * d, 2);
+        draw_rectangle_colour(g.sx1, g.sy1, g.sx2, g.sy2, blue, blue, blue, blue, 0);
+        draw_rectangle_colour(g.sx1, g.sy1, g.sx2, g.sy2, white, white, white, white, 1);
+        var sxm = (g.sx1 + g.sx2) / 2, sym = (g.sy1 + g.sy2) / 2;
+        var fd = rbSub.fOpen ? -1 : 1;
+        draw_line_width(sxm + 3 * fd, sym - 6, sxm - 3 * fd, sym, 2);
+        draw_line_width(sxm - 3 * fd, sym, sxm + 3 * fd, sym + 6, 2);
+        if (rbSub.fOpen) {
+            var fx2 = g.sx1 - 4, fx1 = fx2 - 120, fy1 = sym - 23, fy2 = sym + 23, fmid = (fx1 + fx2) / 2;
+            draw_rectangle_colour(fx1, fy1, fx2, fy2, dark, dark, dark, dark, 0);
+            draw_rectangle_colour(fx1, fy1, fx2, fy1 + 16, blue, blue, blue, blue, 0);
+            draw_rectangle_colour(fx1, fy1, fx2, fy2, white, white, white, white, 1);
+            draw_set_colour(white);
+            draw_set_halign(0);
+            gml_Script_draw_hd_text(_inst, _other, fx1 + 6, fy1 + 8, "FORMATION");
+            draw_set_halign(1);
+            gml_Script_draw_hd_text_transformed(_inst, _other, fmid, fy1 + 25, rbSub.fIdx ? "DUAL HB BACKFIELD" : "DEFAULT", 0.93, 0.93, 0);
+            draw_set_colour(make_color_rgb(150, 175, 215));
+            gml_Script_draw_hd_text(_inst, _other, fmid, fy1 + 37, rbSub.fIdx ? "3 WR 2 RB" : "3 WR 1 TE 1 RB");
+        }
         draw_set_halign(0);
         draw_set_colour(white);
         draw_set_alpha(1);
@@ -1473,9 +1617,9 @@ id:100314,pPreCreateCode:gml_RoomCC_rm_options_31_PreCreate,rotation:0,scaleX:1.
 pPreCreateCode:gml_RoomCC_rm_options_37_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:239,y:184,index:72,id:100288,pPreCreateCode:gml_RoomCC_rm_options_38_PreCreate,rotation:0,scaleX:1.7321434020996094,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:239,y:144,index:72,id:100277,pPreCreateCode:gml_RoomCC_rm_options_39_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:241,y:128,index:39,id:100278,
 pPreCreateCode:gml_RoomCC_rm_options_40_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:390,y:144,index:72,id:100315,pPreCreateCode:gml_RoomCC_rm_options_41_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:392,y:128,index:39,id:100316,pPreCreateCode:gml_RoomCC_rm_options_42_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:-56,y:0,index:137,id:100300,rotation:0,scaleX:1,
 scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:48,y:232,index:20,id:100279,pCode:gml_RoomCC_rm_options_44_Create,pPreCreateCode:gml_RoomCC_rm_options_44_PreCreate,rotation:0,scaleX:2.454545497894287,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:240,y:184,index:72,id:100317,pCode:gml_RoomCC_rm_options_45_Create,pPreCreateCode:gml_RoomCC_rm_options_45_PreCreate,rotation:0,scaleX:1.5,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:240,y:168,index:39,id:100318,pCode:gml_RoomCC_rm_options_46_Create,
-pPreCreateCode:gml_RoomCC_rm_options_46_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:241,y:128,index:39,id:109001,pPreCreateCode:gml_RoomCC_rm_options_47_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:239,y:144,index:72,id:109002,pPreCreateCode:gml_RoomCC_rm_options_48_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:241,y:168,index:39,id:109003,pPreCreateCode:gml_RoomCC_rm_options_49_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:239,y:184,index:72,id:109004,pPreCreateCode:gml_RoomCC_rm_options_50_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:392,y:168,index:39,id:109005,pPreCreateCode:gml_RoomCC_rm_options_51_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:390,y:184,index:72,id:109006,pPreCreateCode:gml_RoomCC_rm_options_52_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:392,y:208,index:39,id:109007,pPreCreateCode:gml_RoomCC_rm_options_53_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:390,y:224,index:72,id:109008,pPreCreateCode:gml_RoomCC_rm_options_54_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:63,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:0,iinstIDs:[]},{pName:"Links_Mobile",id:64,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:0,effectEnabled:1,effectType:"",effectProperties:[],icount:7,iinstIDs:[100272,100273,100274,100275,100276,100277,100278]},{pName:"Exhibition",
+pPreCreateCode:gml_RoomCC_rm_options_46_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:241,y:128,index:39,id:109001,pPreCreateCode:gml_RoomCC_rm_options_47_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:239,y:144,index:72,id:109002,pPreCreateCode:gml_RoomCC_rm_options_48_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:241,y:168,index:39,id:109003,pPreCreateCode:gml_RoomCC_rm_options_49_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:239,y:184,index:72,id:109004,pPreCreateCode:gml_RoomCC_rm_options_50_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:392,y:168,index:39,id:109005,pPreCreateCode:gml_RoomCC_rm_options_51_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:390,y:184,index:72,id:109006,pPreCreateCode:gml_RoomCC_rm_options_52_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:392,y:208,index:39,id:109007,pPreCreateCode:gml_RoomCC_rm_options_53_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:390,y:224,index:72,id:109008,pPreCreateCode:gml_RoomCC_rm_options_54_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295},{x:241,y:208,index:39,id:109009,pPreCreateCode:gml_RoomCC_rm_options_55_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:239,y:224,index:72,id:109010,pPreCreateCode:gml_RoomCC_rm_options_56_PreCreate,rotation:0,scaleX:1.5238100290298462,scaleY:2,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:63,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:0,iinstIDs:[]},{pName:"Links_Mobile",id:64,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:0,effectEnabled:1,effectType:"",effectProperties:[],icount:7,iinstIDs:[100272,100273,100274,100275,100276,100277,100278]},{pName:"Exhibition",
 id:65,type:2,depth:200,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:1,iinstIDs:[100279]},{pName:"Links_Browser",id:66,type:2,depth:300,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:3,iinstIDs:[100280,100281,100282]},{pName:"Instances_ConsoleBuild",id:67,type:2,depth:400,x:0,y:0,hspeed:0,vspeed:0,visible:0,effectEnabled:1,effectType:"",effectProperties:[],icount:6,iinstIDs:[100283,100284,100285,100286,100287,
-100288]},{pName:"Instances_Box",id:68,type:2,depth:500,x:0,y:0,hspeed:0,vspeed:0,visible:0,effectEnabled:1,effectType:"",effectProperties:[],icount:1,iinstIDs:[100289]},{pName:"Instances",id:69,type:2,depth:600,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:37,iinstIDs:[109008,109007,109006,109005,109001,109002,109003,109004,100290,100291,100292,100293,100294,100295,100296,100297,100298,100299,100300,100301,100302,100303,100304,100305,100306,100307,100308,100309,100310,100311,100312,100313,100314,100315,100316,
+100288]},{pName:"Instances_Box",id:68,type:2,depth:500,x:0,y:0,hspeed:0,vspeed:0,visible:0,effectEnabled:1,effectType:"",effectProperties:[],icount:1,iinstIDs:[100289]},{pName:"Instances",id:69,type:2,depth:600,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:39,iinstIDs:[109010,109009,109008,109007,109006,109005,109001,109002,109003,109004,100290,100291,100292,100293,100294,100295,100296,100297,100298,100299,100300,100301,100302,100303,100304,100305,100306,100307,100308,100309,100310,100311,100312,100313,100314,100315,100316,
 100317,100318]},{pName:"Background",id:70,type:1,depth:700,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],bvisible:true,bforeground:false,bindex:-1,bhtiled:false,bvtiled:false,bstretch:false,bblend:-499648,bimage_index:0,bimage_speed:15}]},{pName:"rm_playoffs",width:480,height:270,speed:0,colour:0,LayerCount:5,showColour:false,enableViews:true,viewClearScreen:false,pCode:gml_Room_rm_playoffs_Create,backgrounds:[],views:[{visible:true,wview:480,hview:270,wport:480,
 hport:270},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768}],pInstances:[{x:64,y:56,index:74,id:100324,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:64,y:88,index:74,id:100325,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,
 imageIndex:0,colour:4294967295},{x:64,y:200,index:74,id:100326,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:64,y:168,index:74,id:100327,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:120,y:72,index:74,id:100328,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:120,y:104,index:74,id:100329,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:120,y:184,index:74,id:100330,rotation:0,scaleX:1,
@@ -3272,7 +3416,7 @@ _other){{var ___sw374___=_inst.gmlcollege_admissions_draft_round;var ___swc375__
 }function gml_Script_btn_response_college_admissions_draft_done_yes(_inst,_other){{{var __yy__v688=GetWithArray(97);for(var __yy__v689 in __yy__v688){if(!__yy__v688.hasOwnProperty(__yy__v689))continue;var __yy__v690=__yy__v688[__yy__v689];{__yy__v690.gmlcollege_admissions_draft_round=0;gml_Script_s_destroy_draftlist(__yy__v690,_inst);gml_Script_s_add_news(__yy__v690,_inst,gml_Script_s_str(__yy__v690,_inst,"news_DraftEnded"));__yy__v690.gmlstage=1;gml_Script_s_savegame(__yy__v690,_inst);room_goto(14);}
 }};}}function gml_GlobalScript_s_remaining_picks(_inst,_other){(_inst.gmls_remaining_picks=__yy_method(_inst,gml_Script_s_remaining_picks));}function gml_Script_s_remaining_picks(_inst,_other){{{var __yy__v691=GetWithArray(97);for(var __yy__v692 in __yy__v691){if(!__yy__v691.hasOwnProperty(__yy__v692))continue;var __yy__v693=__yy__v691[__yy__v692];{if(yyfless(__yy__v693.gmldraft_round,1)){return 0;};if(yyfgreater(__yy__v693.gmldraft_round,3)){return 0;};return __yy__v693.gmldraft_picks[__yy_gml_array_check_index(yyfminus(__yy_gml_errCheck(__yy__v693.gmldraft_round),
 1),__yy__v693.gmldraft_picks)];}}};}}function gml_GlobalScript_s_remaining_picks_by_round(_inst,_other,argument0){(_inst.gmls_remaining_picks_by_round=__yy_method(_inst,gml_Script_s_remaining_picks_by_round));}function gml_Script_s_remaining_picks_by_round(_inst,_other,argument0){{var gmlpick_round=argument0;{var __yy__v694=GetWithArray(97);for(var __yy__v695 in __yy__v694){if(!__yy__v694.hasOwnProperty(__yy__v695))continue;var __yy__v696=__yy__v694[__yy__v695];{if(yyfless(gmlpick_round,1)){return 0;};if(yyfgreater(gmlpick_round,
-3)){return 0;};return __yy__v696.gmldraft_picks[__yy_gml_array_check_index(yyfminus(__yy_gml_errCheck(gmlpick_round),1),__yy__v696.gmldraft_picks)];}}};}}function gml_GlobalScript_s_get_trade_value(_inst,_other,argument0){(_inst.gmls_get_trade_value=__yy_method(_inst,gml_Script_s_get_trade_value));}function gml_Script_s_get_trade_value(_inst,_other,argument0){{var gmlrating=gml_Script_s_get_player_rating(_inst,_other,argument0);if(yyfgreaterequal(gmlrating,8)){return 1;};if(yyfgreaterequal(gmlrating,4)){
+3)){return 0;};return __yy__v696.gmldraft_picks[__yy_gml_array_check_index(yyfminus(__yy_gml_errCheck(gmlpick_round),1),__yy__v696.gmldraft_picks)];}}};}}function gml_GlobalScript_s_get_trade_value(_inst,_other,argument0){(_inst.gmls_get_trade_value=__yy_method(_inst,gml_Script_s_get_trade_value));}function gml_Script_s_get_trade_value(_inst,_other,argument0){{var gmlrating=gml_Script_s_get_player_rating(_inst,_other,argument0);if(yyfgreaterequal(gmlrating,8)){return 1;};if(yyfgreaterequal(gmlrating,5)){
 return 2;};return 3;}}function gml_GlobalScript_s_get_trade_value_by_rating(_inst,_other,argument0){(_inst.gmls_get_trade_value_by_rating=__yy_method(_inst,gml_Script_s_get_trade_value_by_rating));}function gml_Script_s_get_trade_value_by_rating(_inst,_other,argument0){{var gmlrating=argument0;if(yyfgreaterequal(gmlrating,8)){return 1;};if(yyfgreaterequal(gmlrating,4)){return 2;};return 3;}}function gml_GlobalScript_s_get_offer_team(_inst,_other,argument0){(_inst.gmls_get_offer_team=__yy_method(_inst,gml_Script_s_get_offer_team));
 }function gml_Script_s_get_offer_team(_inst,_other,argument0){{var gmlpmap=argument0;var gmlteam_id=yyfmod(__yy_gml_errCheck(round(yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,97).gmlweek),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"skill"))),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"strength"))),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stamina"))),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"speed"))),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"age"))),
 __yy_gml_errCheck(ds_map_find_value(gmlpmap,"attitude"))))),32);if(yyfequal(gmlteam_id,yyInst(_inst,_other,97).gmlmyteam_id)){(g_yyPrePostObject__=gmlteam_id,gmlteam_id=(g_yyPrePostObject__ instanceof Long?gmlteam_id.add(1):++gmlteam_id),g_yyPrePostObject__);};if(yyfless(gmlteam_id,yyInst(_inst,_other,97).gmlmin_team_id)){gmlteam_id=yyInst(_inst,_other,97).gmlmax_team_id;};if(yyfgreater(gmlteam_id,yyInst(_inst,_other,97).gmlmax_team_id)){gmlteam_id=yyInst(_inst,_other,97).gmlmin_team_id;};return gml_Script_s_get_team_by_id(_inst,
@@ -3908,7 +4052,7 @@ _other,"tla_Attitude"));ds_list_add(_inst.gmll_names,gml_Script_s_str(_inst,_oth
 "resting");var gmlatt=ds_map_find_value(gmlpmap,"attitude");var gmlyds=string(round(yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_yards")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_rush_yards"))),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_return_yards")))));var gmltds=string(yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_touchdowns")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_rush_touchdowns"))),__yy_gml_errCheck(ds_map_find_value(gmlpmap,
 "stat_return_tds"))));var gmlfum=string(ds_map_find_value(gmlpmap,"stat_fumbles"));var gmltck=string(ds_map_find_value(gmlpmap,"stat_tackles"));var gmlintsck="-";var gmlxpg=ds_map_find_value(gmlpmap,"xp_gain");var ___sw554___=gmlpos;var ___swc555___=-1;if(yyCompareVal(___sw554___,1,g_GMLMathEpsilon,false)==0){___swc555___=0;}else if(yyCompareVal(___sw554___,6,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw554___,15,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw554___,7,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw554___,8,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw554___,
 9,g_GMLMathEpsilon,false)==0){___swc555___=1;}else if(yyCompareVal(___sw554___,10,g_GMLMathEpsilon,false)==0){___swc555___=2;}switch(___swc555___){case 0:{gmltck="-";gmlintsck=yyfplus(yyfplus(__yy_gml_errCheck(string(ds_map_find_value(gmlpmap,"stat_int"))),"/"),__yy_gml_errCheck(string(ds_map_find_value(gmlpmap,"stat_sacks"))));break;}case 1:{gmlintsck=yyfplus(yyfplus(__yy_gml_errCheck(string(ds_map_find_value(gmlpmap,"stat_int"))),"/"),__yy_gml_errCheck(string(ds_map_find_value(gmlpmap,"stat_sacks"))));
-break;}case 2:{gmltck="-";gmltds="-";gmlfum="-";break;}};var gmlrat=string(gml_Script_s_get_match_rating(_inst,_other,gmlpmap));if((yyGetBool((yyGetBool(yyfless(ds_map_find_value(gmlpmap,"condition"),0)))&&(yyGetBool(yyfnotequal(ds_map_find_value(gmlpmap,"injury_week"),yyInst(_inst,_other,97).gmlweek)))))||(yyGetBool(gml_Script_s_player_benched(_inst,_other,gmlpmap)))||(yyGetBool((yyGetBool(ds_map_exists(gmlpmap,"backup")))&&(yyGetBool(ds_map_find_value(gmlpmap,"backup")))))){{gmlfum="-";gmltck="-";
+break;}case 2:{gmltck="-";gmltds="-";gmlfum="-";break;}};var gmlrat=string(gml_Script_s_get_match_rating(_inst,_other,gmlpmap));if((yyGetBool((yyGetBool(yyfless(ds_map_find_value(gmlpmap,"condition"),0)))&&(yyGetBool(yyfnotequal(ds_map_find_value(gmlpmap,"injury_week"),yyInst(_inst,_other,97).gmlweek)))))||(((yyGetBool(gml_Script_s_player_benched(_inst,_other,gmlpmap)))||(yyGetBool((yyGetBool(ds_map_exists(gmlpmap,"backup")))&&(yyGetBool(ds_map_find_value(gmlpmap,"backup"))))))&&!rbHasStats(gmlpmap))){{gmlfum="-";gmltck="-";
 gmlintsck="-";if((yyGetBool(!yyGetBool(ds_map_exists(gmlpmap,"kr"))))||(yyGetBool(!yyGetBool(ds_map_find_value(gmlpmap,"kr"))))){{gmlyds="-";gmltds="-";gmlrat="-";};};};};ds_list_add(_inst.gmll_names,gml_Script_s_get_player_name(_inst,_other,gmlpmap,true));ds_list_add(_inst.gmll_attitude,gmlatt);ds_list_add(_inst.gmll_pos,gmlpos);ds_list_add(_inst.gmll_condition,gmlcon);ds_list_add(_inst.gmll_resting,gmlrst);ds_list_add(_inst.gmll_yards,gmlyds);ds_list_add(_inst.gmll_tds,gmltds);ds_list_add(_inst.gmll_fumbles,
 gmlfum);ds_list_add(_inst.gmll_tackles,gmltck);ds_list_add(_inst.gmll_intsacks,gmlintsck);ds_list_add(_inst.gmll_rating,gmlrat);ds_list_add(_inst.gmll_xp,gmlxpg);if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_suspended,ds_map_find_value(gmlpmap,"suspended"));};};if(yyGetBool(gml_Script_s_has_xp_gain(_inst,_other,gmlpmap))){ds_list_add(_inst.gmll_levelup,yyfplus("flash_",__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Yes"))));}else {ds_list_add(_inst.gmll_levelup,
 gml_Script_s_str(_inst,_other,"ui_No"));};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_gpa,gml_Script_s_gpa_string(_inst,_other,gmlpmap));};};}};};};}}function gml_GlobalScript_s_count_hof_entries(_inst,_other){(_inst.gmls_count_hof_entries=__yy_method(_inst,gml_Script_s_count_hof_entries));}function gml_Script_s_count_hof_entries(_inst,_other){{{var __yy__v874=GetWithArray(97);for(var __yy__v875 in __yy__v874){if(!__yy__v874.hasOwnProperty(__yy__v875))continue;var __yy__v876=__yy__v874[__yy__v875];
@@ -4242,8 +4386,8 @@ _other),3)){gmlgp_axis=yyInst(_inst,_other,global.gmlgp).gmlaxisr_force;};};};va
 case 0:{if((yyGetBool(gml_Script_s_can_throw(_inst,_other)))&&(yyGetBool(gml_Script_s_is_touch_allowed(_inst,_other)))&&(yyGetBool(mouse_check_button(1)))&&(yyGetBool(yyfless(point_distance(_inst.x,_inst.y,g_pBuiltIn.get_mouse_x(),g_pBuiltIn.get_mouse_y()),40)))){{_inst.gmlxtouch=gmlmx;_inst.gmlytouch=gmlmy;_inst.gmlstate=1;};};if(yyGetBool(_inst.gmlholder)){gml_Script_s_update_ball_offset(_inst,_other);};break;}case 1:{_inst.x=yyInst(_inst,_other,gmlcont).gmlx_scrim;_inst.y=yyInst(_inst,_other,gmlcont).gmly_scrim;
 var ___sw762___=yyInst(_inst,_other,97).gmlgamepractice;var ___swc763___=-1;if(yyCompareVal(___sw762___,3,g_GMLMathEpsilon,false)==0){___swc763___=0;}else if(yyCompareVal(___sw762___,2,g_GMLMathEpsilon,false)==0){___swc763___=1;}switch(___swc763___){case 0:{yyInst(_inst,_other,gmlcont).gmltap_msg=gml_Script_s_str(_inst,_other,"training_Throw1");break;}case 1:{yyInst(_inst,_other,gmlcont).gmltap_msg=gml_Script_s_str(_inst,_other,"training_Throw3");if(yyfequal(yyInst(_inst,_other,104).gmlpractice_success,
 0)){{yyInst(_inst,_other,gmlcont).gmltap_msg=gml_Script_s_str(_inst,_other,"training_Running1");if((yyGetBool(yyfequal(g_pBuiltIn.get_os_type(),0)))||(yyGetBool(yyfequal(g_pBuiltIn.get_os_type(),1)))){yyInst(_inst,_other,gmlcont).gmltap_msg=gml_Script_s_str(_inst,_other,"training_Running1b");};};};break;}};if((yyGetBool((yyGetBool(gml_Script_s_is_touch_allowed(_inst,_other)))&&(yyGetBool(mouse_check_button(1)))))||(yyGetBool((yyGetBool(global.gmlgamepad))&&(yyGetBool((yyGetBool(gamepad_button_check_released(yyInst(_inst,
-_other,global.gmlgp).gmlslot,global.gmlgp_handoff)))||(yyGetBool(gmlgp_axis))))&&(yyGetBool(!yyGetBool(gml_Script_s_is_paused_or_just_unpaused(_inst,_other))))))){{{var __yy__v985=GetWithArray(107);for(var __yy__v986 in __yy__v985){if(!__yy__v985.hasOwnProperty(__yy__v986))continue;var __yy__v987=__yy__v985[__yy__v986];{if((yyGetBool(yyfequal(__yy__v987.gmlposition,2)))&&(yyGetBool((yyGetBool((yyGetBool(global.gmlgamepad))&&(yyGetBool(gamepad_button_check_released(yyInst(_inst,_other,global.gmlgp).gmlslot,
-global.gmlgp_handoff)))&&(yyGetBool(!yyGetBool(gml_Script_s_is_paused_or_just_unpaused(__yy__v987,_inst))))))||(yyGetBool((yyGetBool(!yyGetBool(global.gmlgamepad)))&&(yyGetBool(yyfless(point_distance(__yy__v987.x,__yy__v987.y,g_pBuiltIn.get_mouse_x(),g_pBuiltIn.get_mouse_y()),20)))))))){{gml_Script_slog(__yy__v987,_inst,"global.master_ball.state = BALL_HANDOFF;");yyInst(_inst,_other,global.gmlmaster_ball).gmlstate=19;yyInst(_inst,_other,104).gmlplay_start=g_pBuiltIn.get_current_time();yyInst(_inst,
+_other,global.gmlgp).gmlslot,global.gmlgp_handoff)))||(yyGetBool(gmlgp_axis))))&&(yyGetBool(!yyGetBool(gml_Script_s_is_paused_or_just_unpaused(_inst,_other))))))){{{var __yy__v985=GetWithArray(107);for(var __yy__v986 in __yy__v985){if(!__yy__v985.hasOwnProperty(__yy__v986))continue;var __yy__v987=__yy__v985[__yy__v986];{if((yyGetBool((yyfequal(__yy__v987.gmlposition,2)||yyGetBool(__yy__v987.rbRb2))))&&(yyGetBool((yyGetBool((yyGetBool(global.gmlgamepad))&&(yyGetBool(gamepad_button_check_released(yyInst(_inst,_other,global.gmlgp).gmlslot,
+global.gmlgp_handoff)))&&(yyGetBool(!yyGetBool(gml_Script_s_is_paused_or_just_unpaused(__yy__v987,_inst))))))||(yyGetBool((yyGetBool(!yyGetBool(global.gmlgamepad)))&&(yyGetBool(yyfless(point_distance(__yy__v987.x,__yy__v987.y,g_pBuiltIn.get_mouse_x(),g_pBuiltIn.get_mouse_y()),20)))))))){{gml_Script_slog(__yy__v987,_inst,"global.master_ball.state = BALL_HANDOFF;");rbHandoffPick(__yy__v987);yyInst(_inst,_other,global.gmlmaster_ball).gmlstate=19;yyInst(_inst,_other,104).gmlplay_start=g_pBuiltIn.get_current_time();yyInst(_inst,
 _other,104).gmlrunning_play=true;gml_Script_s_sound_throw(__yy__v987,_inst);instance_destroy(__yy__v987,121);instance_destroy(__yy__v987,123);break;};};}}};if((yyGetBool(yyfnotequal(yyInst(_inst,_other,97).gmlgamepractice,2)))||(yyGetBool(yyfgreater(yyInst(_inst,_other,104).gmlpractice_success,0)))){{if(yyfnotequal(_inst.gmlstate,19)){{_inst.gmlxtouch=gmlmx;_inst.gmlytouch=gmlmy;_inst.gmlstate=1;gml_Script_slog(_inst,_other,"state = BALL_AIM_DEADZONE");};};};};};};break;}case 2:{if((yyGetBool(global.gmlgamepad))&&(yyGetBool(yyfgreater(gmlgp_axis,
 0.2)))){{_inst.gmlstate=2;gml_Script_s_sound_throw(_inst,_other);};}else {if((yyGetBool(mouse_check_button(1)))&&(yyGetBool(gml_Script_s_is_touch_allowed(_inst,_other)))){{_inst.gmldragdist=point_distance(_inst.gmlxtouch,_inst.gmlytouch,gmlmx,gmlmy);if(yyfgreater(_inst.gmldragdist,20)){{_inst.gmlstate=2;gml_Script_s_sound_throw(_inst,_other);};};};}else {{_inst.gmlstate=0;return;};};};break;}case 3:{instance_destroy(_inst,121);instance_destroy(_inst,123);if(yyfequal(yyInst(_inst,_other,97).gmlgamepractice,
 3)){yyInst(_inst,_other,gmlcont).gmltap_msg=gml_Script_s_str(_inst,_other,"training_Throw2");};if((yyGetBool(yyfequal(yyInst(_inst,_other,97).gmlgamepractice,2)))&&(yyGetBool(yyfgreater(yyInst(_inst,_other,104).gmlpractice_success,0)))){yyInst(_inst,_other,gmlcont).gmltap_msg=gml_Script_s_str(_inst,_other,"training_Throw3");};{var __yy__v988=GetWithArray(_inst.gmlholder);for(var __yy__v989 in __yy__v988){if(!__yy__v988.hasOwnProperty(__yy__v989))continue;var __yy__v990=__yy__v988[__yy__v989];{if((yyGetBool(!yyGetBool(path_exists(__yy__v990.gmlmy_route))))&&(yyGetBool(!yyGetBool(gml_Script_s_is_falling(__yy__v990,
@@ -4701,10 +4845,10 @@ var __yy__v1170=__yy__v1168[__yy__v1169];{gml_Script_slog_roster(__yy__v1170,_in
 _inst,__yy__v1170.gmlteam_roster[__yy_gml_array_check_index(1,__yy__v1170.gmlteam_roster)],4);}}};global.gmlreplay_do=false;_inst.gmlplaystart_time=g_pBuiltIn.get_current_time();_inst.gmltimeout_called=false;_inst.gmlkicking=0;_inst.gmlrunning_play=false;_inst.gmlscorer="";_inst.gmlscored_by=(-1);_inst.gmldrop_happened=false;_inst.gmlcheer_frame=0;_inst.gmldist_td=0;if(yyfequal(_inst.gmlquarter,5)){{_inst.gmlhad_ot_possession=__yy_gml_array_check(_inst.gmlhad_ot_possession,1346804767);_inst.gmlhad_ot_possession[__yy_gml_array_check_index_set(_inst.gmlpossession)]=1;
 gml_Script_slog(_inst,_other,yyfplus(yyfplus("had_ot_possession[",__yy_gml_errCheck(string(_inst.gmlpossession))),"] = 1"));};};var ___sw990___=_inst.gmldown;var ___swc991___=-1;if(yyCompareVal(___sw990___,99,g_GMLMathEpsilon,false)==0){___swc991___=0;}else if(yyCompareVal(___sw990___,4,g_GMLMathEpsilon,false)==0){___swc991___=1;}else if(yyCompareVal(___sw990___,5,g_GMLMathEpsilon,false)==0){___swc991___=2;}else if(yyCompareVal(___sw990___,6,g_GMLMathEpsilon,false)==0){___swc991___=3;}else if(yyCompareVal(___sw990___,
 7,g_GMLMathEpsilon,false)==0){___swc991___=4;}switch(___swc991___){case 0:{gml_Script_s_set_up_kickoff(_inst,_other);if(!yyGetBool(global.gmlexhibition)){{if((yyGetBool(yyfgreater(yyInst(_inst,_other,97).gmltag_kr_message_done,0)))&&(yyGetBool(yyfless(yyInst(_inst,_other,97).gmltag_kr_message_done,3)))){{yyInst(_inst,_other,97).gmltag_kr_message_done=3;gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,"msg_TouchBack"),gml_Script_s_str(_inst,_other,"ui_Continue"),"",kgml_Script_s_msg_clear,
-"",16777215,0.7);};};};};return;}case 1:{if((yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlminutes,0)))&&(yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlseconds,0)))){{gml_Script_s_action_result(_inst,_other,9);return;};}else {if(!yyGetBool(argument0)){{if(yyfless(_inst.gmlscrimmage,(-2))){{if((yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlquarter,5)))&&(yyGetBool(gml_Script_s_both_teams_had_possession(_inst,_other)))&&(yyGetBool(yyfnotequal(yyInst(_inst,_other,104).gmlteam_score[__yy_gml_array_check_index(0,
+"",16777215,0.7);};};};};return;}case 1:{if((yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlminutes,0)))&&(yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlseconds,0)))){{gml_Script_s_action_result(_inst,_other,9);return;};}else {if(!yyGetBool(argument0)){{if(yyfless(_inst.gmlscrimmage,(-8))){{if((yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlquarter,5)))&&(yyGetBool(gml_Script_s_both_teams_had_possession(_inst,_other)))&&(yyGetBool(yyfnotequal(yyInst(_inst,_other,104).gmlteam_score[__yy_gml_array_check_index(0,
 yyInst(_inst,_other,104).gmlteam_score)],yyInst(_inst,_other,104).gmlteam_score[__yy_gml_array_check_index(1,yyInst(_inst,_other,104).gmlteam_score)])))){break;}else {gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,"matchmsg_PlayPunt"),gml_Script_s_str(_inst,_other,"down_4"),gml_Script_s_str(_inst,_other,"Punt"),kgml_Script_btn_response_kick_no,kgml_Script_btn_response_punt_yes,16777215,0.7);};};}else {{var gmlstr_down=gml_Script_s_str(_inst,_other,yyfplus("down_",__yy_gml_errCheck(string(_inst.gmldown))));
 var gmlmsg=gml_Script_s_str(_inst,_other,"matchmsg_PlayFG");gmlmsg=string_replace(gmlmsg,"$down",gmlstr_down);gml_Script_s_create_message(_inst,_other,"",gmlmsg,gmlstr_down,gml_Script_s_str(_inst,_other,"Field Goal"),kgml_Script_btn_response_kick_no,kgml_Script_btn_response_fg_yes,16777215,0.7);};};};};};break;}case 2:{gml_Script_s_action_result(_inst,_other,4);return;break;}case 3:{_inst.gmlyards=2;_inst.gmlscrimmage=48;break;}case 4:{gml_Script_s_action_result(_inst,_other,4);return;break;}default :{
-if((yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlminutes,0)))&&(yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlseconds,0)))){{gml_Script_s_action_result(_inst,_other,9);return;};}else {if((yyGetBool(!yyGetBool(argument0)))&&(yyGetBool(yyfgreaterequal(_inst.gmlscrimmage,(-2))))&&(yyGetBool(gml_Script_s_last_secs_of_half(_inst,_other,20)))){{var gmlstr_down=gml_Script_s_str(_inst,_other,yyfplus("down_",__yy_gml_errCheck(string(_inst.gmldown))));var gmlmsg=gml_Script_s_str(_inst,_other,"matchmsg_PlayFG");
+if((yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlminutes,0)))&&(yyGetBool(yyflessequal(yyInst(_inst,_other,104).gmlseconds,0)))){{gml_Script_s_action_result(_inst,_other,9);return;};}else {if((yyGetBool(!yyGetBool(argument0)))&&(yyGetBool(yyfgreaterequal(_inst.gmlscrimmage,(-8))))&&(yyGetBool(gml_Script_s_last_secs_of_half(_inst,_other,20)))){{var gmlstr_down=gml_Script_s_str(_inst,_other,yyfplus("down_",__yy_gml_errCheck(string(_inst.gmldown))));var gmlmsg=gml_Script_s_str(_inst,_other,"matchmsg_PlayFG");
 gmlmsg=string_replace(gmlmsg,"$down",gmlstr_down);gml_Script_slog(_inst,_other,"Offer Field Goal");gml_Script_s_create_message(_inst,_other,"",gmlmsg,gmlstr_down,gml_Script_s_str(_inst,_other,"Field Goal"),kgml_Script_btn_response_kick_no,kgml_Script_btn_response_fg_yes,16777215,0.7);};}else {if((yyGetBool(!yyGetBool(global.gmlexhibition)))&&(yyGetBool(yyfgreater(yyInst(_inst,_other,97).gmlyear,1)))&&(yyGetBool(!yyGetBool(yyInst(_inst,_other,97).gmlgamepractice)))&&(yyGetBool(!yyGetBool(yyInst(_inst,
 _other,97).gmltimeout_message_done)))){{var gmlmsg="msg_Audibles";if(yyGetBool(global.gmlbrowser)){gmlmsg="msg_AudiblesHtml";};if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){gmlmsg="msg_AudiblesQB";};gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,gmlmsg),gml_Script_s_str(_inst,_other,"ui_Continue"),"",kgml_Script_s_msg_timeouts,"",16777215,0.7);};}else {if((yyGetBool(!yyGetBool(global.gmlexhibition)))&&(yyGetBool(yyfgreater(yyInst(_inst,_other,97).gmlyear,1)))&&(yyGetBool(yyfgreater(yyInst(_inst,
 _other,97).gmlweek,1)))&&(yyGetBool(!yyGetBool(yyInst(_inst,_other,97).gmlgamepractice)))&&(yyGetBool(!yyGetBool(yyInst(_inst,_other,97).gmlbullet_throw_message_done)))){{var gmlmsg="msg_BulletThrow";if(yyGetBool(global.gmlgamepad)){gmlmsg="msg_BulletThrowGamepad";}else {if(!yyGetBool(global.gmlmobile_device)){gmlmsg="msg_BulletThrowHtml";};};yyInst(_inst,_other,97).gmlbullet_throw_message_done=1;gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,gmlmsg),gml_Script_s_str(_inst,
@@ -4970,7 +5114,7 @@ var __yy__v1224=__yy__v1222[__yy__v1223];ds_map_set(gmlfixture,"weather",__yy__v
 _other);gml_Script_s_update_music(_inst,_other);gml_Script_s_play(_inst,_other,1);}}function gml_GlobalScript_s_update_stats(_inst,_other){(_inst.gmls_update_stats=__yy_method(_inst,gml_Script_s_update_stats));}function gml_Script_s_update_stats(_inst,_other){{{var __yy__v1225=GetWithArray(97);for(var __yy__v1226 in __yy__v1225){if(!__yy__v1225.hasOwnProperty(__yy__v1226))continue;var __yy__v1227=__yy__v1225[__yy__v1226];{gml_Script_slog(__yy__v1227,_inst,"s_update_stats");ds_list_shuffle(__yy__v1227.gmlroster);
 var gmlinjury_done=false;var gmloc=gml_Script_s_get_staff(__yy__v1227,_inst,102);var gmldc=gml_Script_s_get_staff(__yy__v1227,_inst,101);if(!yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){{ds_map_set(gmloc,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmloc,"xp_gain")),__yy_gml_errCheck(clamp(round(yyftime(__yy_gml_errCheck(ds_map_find_value(gmloc,"attitude")),0.25)),1,25))));ds_map_set(gmldc,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmldc,"xp_gain")),__yy_gml_errCheck(clamp(round(yyftime(__yy_gml_errCheck(ds_map_find_value(gmldc,
 "attitude")),0.25)),1,25))));};};var gmltotal_passing=0;var gmlqb_passing=0;var gmltotal_rushing=0;var gmli=0;for(;yyfless(gmli,ds_list_size(__yy__v1227.gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(__yy__v1227.gmlroster,gmli);gml_Script_s_check_for_return_stats(__yy__v1227,_inst,gmlpmap);gml_Script_s_update_party_meter(__yy__v1227,_inst,gmlpmap);if(!yyGetBool(ds_map_exists(gmlpmap,"xp_dev"))){ds_map_set(gmlpmap,
-"xp_dev",random_range(0.75,1.5));};if((yyGetBool(yyfless(ds_map_find_value(gmlpmap,"condition"),0)))||(yyGetBool(gml_Script_s_player_benched(__yy__v1227,_inst,gmlpmap)))){continue;};if((yyGetBool(ds_map_exists(gmlpmap,"backup")))&&(yyGetBool(ds_map_find_value(gmlpmap,"backup")))&&(yyGetBool((yyGetBool(!yyGetBool(ds_map_exists(gmlpmap,"kr"))))||(yyGetBool(!yyGetBool(ds_map_find_value(gmlpmap,"kr"))))))){{ds_map_set(gmlpmap,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"xp_gain")),
+"xp_dev",random_range(0.75,1.5));};if((yyGetBool(yyfless(ds_map_find_value(gmlpmap,"condition"),0)))||((yyGetBool(gml_Script_s_player_benched(__yy__v1227,_inst,gmlpmap))&&!rbHasStats(gmlpmap)))){continue;};if((yyGetBool(ds_map_exists(gmlpmap,"backup")))&&(yyGetBool(ds_map_find_value(gmlpmap,"backup")))&&(!rbHasStats(gmlpmap))&&(yyGetBool((yyGetBool(!yyGetBool(ds_map_exists(gmlpmap,"kr"))))||(yyGetBool(!yyGetBool(ds_map_find_value(gmlpmap,"kr"))))))){{ds_map_set(gmlpmap,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"xp_gain")),
 __yy_gml_errCheck(round(yyftime(10,__yy_gml_errCheck(real(ds_map_find_value(gmlpmap,"xp_dev"))))))));continue;};};ds_map_set_post(gmlpmap,"season_games",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_games")),1));ds_map_set(gmlpmap,"season_attempts",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_attempts")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_attempts"))));ds_map_set(gmlpmap,"season_complete",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_complete")),
 __yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_complete"))));ds_map_set(gmlpmap,"season_yards",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_yards")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_yards"))));ds_map_set(gmlpmap,"season_touchdowns",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_touchdowns")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_touchdowns"))));ds_map_set(gmlpmap,"season_fumbles",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_fumbles")),
 __yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_fumbles"))));ds_map_set(gmlpmap,"season_int",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_int")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_int"))));ds_map_set(gmlpmap,"season_sacks",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_sacks")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_sacks"))));ds_map_set(gmlpmap,"season_tackles",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_tackles")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,
@@ -5108,7 +5252,7 @@ _other){{draw_set_colour(0);draw_set_alpha(yyftime(__yy_gml_errCheck(_inst.gmlmy
 gmlpt))));if(yyfgreater(_inst.gmlmy_route_starty,300)){gmlnexty=yyfminus(__yy_gml_errCheck(_inst.gmlmy_route_starty),__yy_gml_errCheck(path_get_point_y(_inst.gmlmy_route,gmlpt)));};draw_line_width(gmllastx,yyfplus(__yy_gml_errCheck(gmllasty),1),gmlnextx,yyfplus(__yy_gml_errCheck(gmlnexty),1),5);draw_circle(gmlnextx,yyfplus(__yy_gml_errCheck(gmlnexty),1),2.5,0);_inst.gmlmy_route_end_dir=999;var ___sw1130___=yyInst(_inst,_other,104).gmldrivedir;var ___swc1131___=-1;if(yyCompareVal(___sw1130___,(-1),
 g_GMLMathEpsilon,false)==0){___swc1131___=0;}else if(yyCompareVal(___sw1130___,1,g_GMLMathEpsilon,false)==0){___swc1131___=1;}switch(___swc1131___){case 0:{if(yyflessequal(gmlnextx,gmllastx)){_inst.gmlmy_route_end_dir=point_direction(gmllastx,gmllasty,gmlnextx,gmlnexty);};break;}case 1:{if(yyfgreaterequal(gmlnextx,gmllastx)){_inst.gmlmy_route_end_dir=point_direction(gmllastx,gmllasty,gmlnextx,gmlnexty);};break;}};gmllastx=gmlnextx;gmllasty=gmlnexty;}};if(yyGetBool(_inst.gmlte_blocking)){{draw_set_colour(0);
 draw_set_alpha(yyftime(__yy_gml_errCheck(_inst.gmlmy_route_alpha),0.5));draw_line_width(gmllastx,yyfminus(__yy_gml_errCheck(gmllasty),5),gmlnextx,yyfplus(__yy_gml_errCheck(gmlnexty),7),5);};}else {if(yyfequal(_inst.gmlmy_route_end_dir,999)){{draw_set_colour(0);draw_set_alpha(yyftime(__yy_gml_errCheck(_inst.gmlmy_route_alpha),0.5));draw_circle(gmllastx,yyfplus(__yy_gml_errCheck(gmllasty),1),5,0);};}else {{if(yyfgreaterequal(_inst.gmlmy_route_end_dir,270)){{gmllastx=yyfplus(gmllastx,1.5);gmllasty=yyfplus(gmllasty,
-1);};}else {if(yyfgreater(_inst.gmlmy_route_end_dir,90)){{gmllastx=yyfplus(gmllastx,1.5);gmllasty=yyfplus(gmllasty,2);};};};draw_sprite_ext(_inst,77,0,gmllastx,yyfplus(__yy_gml_errCheck(gmllasty),1),0.75,0.75,_inst.gmlmy_route_end_dir,0,yyftime(__yy_gml_errCheck(_inst.gmlmy_route_alpha),0.5));};};};var gmlcol=global.gmlc_routes;if((yyGetBool(_inst.gmlte_blocking))||(yyGetBool(yyfequal(_inst.gmlposition,1)))){gmlcol=16777215;}else {if(yyfequal(_inst.gmlposition,2)){gmlcol=global.gmlc_routes_rb;};};if((yyGetBool(yyInst(_inst,
+1);};}else {if(yyfgreater(_inst.gmlmy_route_end_dir,90)){{gmllastx=yyfplus(gmllastx,1.5);gmllasty=yyfplus(gmllasty,2);};};};draw_sprite_ext(_inst,77,0,gmllastx,yyfplus(__yy_gml_errCheck(gmllasty),1),0.75,0.75,_inst.gmlmy_route_end_dir,0,yyftime(__yy_gml_errCheck(_inst.gmlmy_route_alpha),0.5));};};};var gmlcol=global.gmlc_routes;if((yyGetBool(_inst.gmlte_blocking))||(yyGetBool(yyfequal(_inst.gmlposition,1)))){gmlcol=16777215;}else {if(yyfequal(_inst.gmlposition,2)||yyGetBool(_inst.rbRb2)){gmlcol=global.gmlc_routes_rb;};};if((yyGetBool(yyInst(_inst,
 _other,97).gmlqb_mode))&&(yyGetBool(_inst.gmlrewarded_route))){gmlcol=255;};draw_set_colour(gmlcol);draw_set_alpha(_inst.gmlmy_route_alpha);gmllastx=round(_inst.gmlmy_route_startx);gmllasty=round(_inst.gmlmy_route_starty);var gmlpt=0;for(;yyfless(gmlpt,gmlnum);gmlpt=yyfplus(gmlpt,1)){{var gmlnextx=round(yyfplus(__yy_gml_errCheck(_inst.gmlmy_route_startx),__yy_gml_errCheck(path_get_point_x(_inst.gmlmy_route,gmlpt))));var gmlnexty=round(yyfplus(__yy_gml_errCheck(_inst.gmlmy_route_starty),__yy_gml_errCheck(path_get_point_y(_inst.gmlmy_route,
 gmlpt))));if(yyfgreater(_inst.gmlmy_route_starty,300)){gmlnexty=yyfminus(__yy_gml_errCheck(_inst.gmlmy_route_starty),__yy_gml_errCheck(path_get_point_y(_inst.gmlmy_route,gmlpt)));};draw_line_width(gmllastx,gmllasty,gmlnextx,gmlnexty,5);draw_circle(gmlnextx,gmlnexty,2.5,0);gmllastx=gmlnextx;gmllasty=gmlnexty;}};if(yyGetBool(_inst.gmlte_blocking)){{_inst.gmlmy_route_end_dir=999;draw_set_colour(16777215);draw_set_alpha(_inst.gmlmy_route_alpha);draw_line_width(gmllastx,yyfminus(__yy_gml_errCheck(gmllasty),
 6),gmlnextx,yyfplus(__yy_gml_errCheck(gmlnexty),6),5);};}else {if(yyfequal(_inst.gmlmy_route_end_dir,999)){{draw_set_colour(gmlcol);draw_set_alpha(_inst.gmlmy_route_alpha);draw_circle(gmllastx,gmllasty,5,0);};}else {{if(yyfgreaterequal(_inst.gmlmy_route_end_dir,270)){{gmllastx=yyfplus(gmllastx,1.5);gmllasty=yyfplus(gmllasty,1);};}else {if(yyfgreater(_inst.gmlmy_route_end_dir,90)){{gmllastx=yyfplus(gmllastx,1.5);gmllasty=yyfplus(gmllasty,2);};};};draw_sprite_ext(_inst,77,0,gmllastx,gmllasty,0.75,0.75,
@@ -5381,7 +5525,7 @@ break;}case 9:{gmlmax_rating=37;break;}};var gmlmstm=0;var gmlmspd=0;var gmlmstr
 "max_skill"));};gmlrating=yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gmlmstm),__yy_gml_errCheck(gmlmspd)),__yy_gml_errCheck(gmlmstr)),__yy_gml_errCheck(gmlmskl));return clamp(round(yyftime(__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(gmlrating),__yy_gml_errCheck(gmlmax_rating))),10)),1,10);}}function gml_GlobalScript_s_obj_player_draw_begin(_inst,_other){(_inst.gmls_obj_player_draw_begin=__yy_method(_inst,gml_Script_s_obj_player_draw_begin));}function gml_Script_s_obj_player_draw_begin(_inst,_other){
 {if(yyfequal(yyInst(_inst,_other,104).gmlstate,3)){return;};var gmlball=global.gmlmaster_ball;var ___sw1198___=yyInst(_inst,_other,gmlball).gmlstate;var ___swc1199___=-1;if(yyCompareVal(___sw1198___,0,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1198___,1,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1198___,2,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1198___,18,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1198___,19,g_GMLMathEpsilon,false)==0){___swc1199___=0;}switch(___swc1199___){case 0:{if(yyGetBool(path_exists(_inst.gmlmy_route))){
 {gml_Script_s_draw_my_route(_inst,_other);};};break;}};if(yyfequal(yyInst(_inst,_other,104).gmlstate,10)){return;};var gmlf=yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),60))),1)),2);if(yyGetBool(_inst.gmldead)){gmlf=yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),120))),1)),2);};if(yyfequal(yyInst(_inst,_other,gmlball).gmlholder,_inst.id)){{if((yyGetBool(yyfequal(yyInst(_inst,
-_other,97).gmlgamepractice,2)))&&(yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlpractice_success,0)))){gmlf=0;};draw_sprite_ext(_inst,80,0,_inst.x,_inst.y,2,2,0,16777215,gmlf);};}else {if((yyGetBool(yyfequal(_inst.gmlposition,2)))&&(yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlstate,0)))){{if(yyfnotequal(yyInst(_inst,_other,97).gmlgamepractice,2)){gmlf=1;};var gmls=yyfplus(2.5,__yy_gml_errCheck(yyftime(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),100))),0.5)));
+_other,97).gmlgamepractice,2)))&&(yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlpractice_success,0)))){gmlf=0;};draw_sprite_ext(_inst,80,0,_inst.x,_inst.y,2,2,0,16777215,gmlf);};}else {if(((yyGetBool(yyfequal(_inst.gmlposition,2)))||yyGetBool(_inst.rbRb2))&&(yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlstate,0)))){{if(yyfnotequal(yyInst(_inst,_other,97).gmlgamepractice,2)){gmlf=1;};var gmls=yyfplus(2.5,__yy_gml_errCheck(yyftime(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),100))),0.5)));
 draw_sprite_ext(_inst,80,0,_inst.x,_inst.y,gmls,gmls,0,global.gmlc_routes_rb,gmlf);};};};}}function gml_GlobalScript_s_get_player_by_position(_inst,_other){(_inst.gmls_get_player_by_position=__yy_method(_inst,gml_Script_s_get_player_by_position));(_inst.gmls_get_player_by_position_from_roster=__yy_method(_inst,gml_Script_s_get_player_by_position_from_roster));(_inst.gmls_get_player_kick_returner=__yy_method(_inst,gml_Script_s_get_player_kick_returner));}function gml_Script_s_get_player_by_position(_inst,
 _other,argument0,argument1){{{var __yy__v1483=GetWithArray(97);for(var __yy__v1484 in __yy__v1483){if(!__yy__v1483.hasOwnProperty(__yy__v1484))continue;var __yy__v1485=__yy__v1483[__yy__v1484];{var gmlcount=0;var gmli=0;for(;yyfless(gmli,ds_list_size(__yy__v1485.gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(__yy__v1485.gmlroster,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;};if(yyfless(ds_map_find_value(gmlpmap,
 "condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1485,_inst,gmlpmap))){continue;};if(yyfequal(ds_map_find_value(gmlpmap,"position"),argument0)){{(g_yyPrePostObject__=gmlcount,gmlcount=(g_yyPrePostObject__ instanceof Long?gmlcount.add(1):++gmlcount),g_yyPrePostObject__);if(yyfequal(gmlcount,argument1)){return gmlpmap;};};};}};}}};return(-4);}}function gml_Script_s_get_player_by_position_from_roster(_inst,_other,argument0,argument1,argument2){{if(yyfequal(argument2,(-4))){{gml_Script_slog2(_inst,
@@ -7380,7 +7524,7 @@ gmli)),1),1,ds_map_find_value(gmlpmap,"condition")));if(yyfless(ds_list_find_val
 g_yyPrePostObject__);break;}};}function gml_Object_obj_xp_update_Draw_0(_inst,_other){}function gml_Object_obj_xp_update_Draw_64(_inst,_other){draw_set_font(global.gmlfnt_small_flex);draw_set_halign(1);draw_set_alpha(1);var gmltx=yyfplus(__yy_gml_errCheck(_inst.x),4);var gmlty=yyfplus(__yy_gml_errCheck(_inst.y),18);var gmlline_buf=13;var gmlcol_buf=34;var gmlshowSal=true;var gmlshowCnt=true;var gmlshowAge=true;var gmlshowGpa=false;if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gmlshowSal=false;gmlshowCnt=false;
 gmlshowGpa=true;if(yyfequal(yyInst(_inst,_other,97).gmlstage,7)){{var gmlbyeWeek=gml_Script_s_is_bye_week(_inst,_other,yyInst(_inst,_other,97).gmlweek);if(!yyGetBool(gmlbyeWeek)){{gmlshowSal=true;gmlshowCnt=true;gmlshowGpa=true;gmlcol_buf=30;};};};};};};if(yyfgreater(ds_list_size(_inst.gmll_attitude),11)){{gmlty=yyfplus(__yy_gml_errCheck(_inst.y),14);gmlline_buf=11.5;};};var gmlvis=11;var gmlnp=ds_list_size(_inst.gmll_attitude)-1;var gmlscrollon=(gmlnp>gmlvis);if(_inst.gmlscroll===undefined){_inst.gmlscroll=0;_inst.gmldrag_y=-1;_inst.gmldrag_s=0;}if(gmlscrollon){var gmlmaxscr=gmlnp-gmlvis;if(mouse_wheel_down()||keyboard_check_pressed(40)){_inst.gmlscroll=_inst.gmlscroll+1;}if(mouse_wheel_up()||keyboard_check_pressed(38)){_inst.gmlscroll=_inst.gmlscroll-1;}var gmlmx=device_mouse_x_to_gui(0);var gmlmy=device_mouse_y_to_gui(0);if(mouse_check_button_pressed(1)&&gmlmy>70&&gmlmy<225&&gmlmx>18&&gmlmx<462){_inst.gmldrag_y=gmlmy;_inst.gmldrag_s=_inst.gmlscroll;}if(mouse_check_button(1)&&_inst.gmldrag_y>=0){_inst.gmlscroll=_inst.gmldrag_s-Math.round((gmlmy-_inst.gmldrag_y)/11.5);}else {_inst.gmldrag_y=-1;}_inst.gmlscroll=Math.max(0,Math.min(gmlmaxscr,_inst.gmlscroll));}else {_inst.gmlscroll=0;}var gmlscr=_inst.gmlscroll;var gmll=0;for(;yyfless(gmll,ds_list_size(_inst.gmll_attitude));(g_yyPrePostObject__=gmll,gmll=(g_yyPrePostObject__ instanceof Long?gmll.add(1):++gmll),
 g_yyPrePostObject__)){{if(gmlscrollon&&gmll>0&&(gmll<1+gmlscr||gmll>=1+gmlscr+gmlvis)){continue;}draw_set_color(16777215);if(yyfgreater(gmll,0)){{if((yyGetBool(gml_Script_s_is_co_mode(_inst,_other)))&&(yyGetBool(ds_list_find_value(_inst.gmll_suspended,gmll)))){draw_sprite(_inst,111,4,gmltx,gmlty);}else {if(yyGetBool(ds_list_find_value(_inst.gmll_resting,gmll))){draw_sprite(_inst,111,3,gmltx,gmlty);}else {draw_sprite(_inst,107,gml_Script_s_get_attitude_icon(_inst,_other,ds_list_find_value(_inst.gmll_attitude,gmll)),gmltx,gmlty);};};};};gmltx=yyfplus(gmltx,12);draw_set_halign(0);
-var gmltxt=ds_list_find_value(_inst.gmll_names,gmll);if(yyfequal(gmll,0)){gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),gmltxt,0,0,0,0,1);};gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,gmltxt);draw_set_halign(1);gmltx=yyfplus(gmltx,82);draw_set_color(gml_Script_s_get_position_colour(_inst,_other,ds_list_find_value(_inst.gmll_pos,gmll)));var gmltxt=gml_Script_s_get_string_position(_inst,_other,ds_list_find_value(_inst.gmll_pos,
+var gmltxt=ds_list_find_value(_inst.gmll_names,gmll);if(yyfequal(gmll,0)){gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),gmltxt,0,0,0,0,1);};rbDrawNameFit(_inst,_other,gmltx,gmlty,gmltxt);draw_set_halign(1);gmltx=yyfplus(gmltx,82);draw_set_color(gml_Script_s_get_position_colour(_inst,_other,ds_list_find_value(_inst.gmll_pos,gmll)));var gmltxt=gml_Script_s_get_string_position(_inst,_other,ds_list_find_value(_inst.gmll_pos,
 gmll));gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),gmltxt,0,0,0,0,1);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,gmltxt);draw_set_color(16777215);gmltx=yyfplus(gmltx,gmlcol_buf);var gmlcon=ds_list_find_value(_inst.gmll_condition,gmll);if(yyfequal(gmll,0)){{gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),gmlcon,0,0,0,0,1);gml_Script_draw_hd_text(_inst,_other,
 gmltx,gmlty,gmlcon);};}else {{if(yyflessequal(gmlcon,40)){{var gmlstr_con=string(abs(gmlcon));if(yyflessequal(gmlcon,0)){{gml_Script_draw_hd_text_color(_inst,_other,yyfplus(__yy_gml_errCheck(gmltx),5),yyfplus(__yy_gml_errCheck(gmlty),1),gmlstr_con,0,0,0,0,1);gml_Script_draw_hd_text_color(_inst,_other,yyfplus(__yy_gml_errCheck(gmltx),6),gmlty,gmlstr_con,255,255,255,255,1);draw_sprite(_inst,111,0,yyfminus(yyfminus(__yy_gml_errCheck(gmltx),2),__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(gml_Script_string_hd_width(_inst,
 _other,gmlstr_con)),2))),gmlty);};}else {if(yyflessequal(gmlcon,20)){{gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),yyfplus(__yy_gml_errCheck(gmlstr_con),"%"),0,0,0,0,1);gml_Script_draw_hd_text_color(_inst,_other,gmltx,gmlty,yyfplus(__yy_gml_errCheck(gmlstr_con),"%"),4235519,4235519,4235519,4235519,1);};}else {{gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),yyfplus(__yy_gml_errCheck(gmlstr_con),
@@ -7640,7 +7784,7 @@ global.gmlc_background);}function gml_RoomCC_rm_league_0_PreCreate(_inst,_other)
 _other){_inst.gmlactive=false;}function gml_RoomCC_rm_league_5_PreCreate(_inst,_other){_inst.gmlactive=false;}function gml_RoomCC_rm_league_6_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_LeagueAFC;_inst.gmltext=gml_Script_s_str(_inst,_inst,"conf_AFC");}function gml_RoomCC_rm_league_7_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_LeagueNFC;_inst.gmltext=gml_Script_s_str(_inst,_inst,"conf_NFC");}function gml_RoomCC_rm_league_8_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_LeagueSchedule;
 _inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Schedule");}function gml_RoomCC_rm_league_10_PreCreate(_inst,_other){_inst.gmlimage=144;_inst.gmlonClickAction=kgml_Script_btn_click_SchedulePrev;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32773;}function gml_RoomCC_rm_league_11_PreCreate(_inst,_other){_inst.gmlimage=146;_inst.gmlonClickAction=kgml_Script_btn_click_ScheduleNext;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32774;}function gml_RoomCC_rm_league_12_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_LeagueMode;
 _inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_View");}function gml_RoomCC_rm_league_14_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_PlayOffs;_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_PlayOffs");}function gml_RoomCC_rm_league_15_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Review");_inst.gmlonClickAction=kgml_Script_btn_click_SeasonReview;_inst.gmlgp_mapped_button=32771;}function gml_Room_rm_options_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),
-global.gmlc_background);}function gml_RoomCC_rm_options_47_PreCreate(_inst,_other){_inst.gmltext="ENTER CCS";_inst.gmlonClickAction=function(_i,_o){var _v=get_integer("Enter coach credits to add:","100");if(typeof _v!=="number"||!isFinite(_v)||_v<=0){return;}_v=Math.min(Math.floor(_v),2000000000);var _m=yyInst(_i,_o,97);_m.gmlcoach_credit=yyfplus(_m.gmlcoach_credit,_v);try{gml_Script_s_savegame(_i,_o);}catch(_e){}gml_Script_s_create_message(_i,_o,"","ADDED "+_v+" COACH CREDITS",gml_Script_s_str(_i,_o,"ui_Ok"),"",kgml_Script_s_msg_clear,"",global.gmlc_background,1);};}function gml_RoomCC_rm_options_48_PreCreate(_inst,_other){_inst.gmltext="COACH CREDITS";_inst.gmldraw_box=false;_inst.gmlhalign=2;}function gml_RoomCC_rm_options_49_PreCreate(_inst,_other){_inst.gmltext="BLACKJACK";_inst.gmlonClickAction=function(_i,_o){rbBlackjack(_i,_o);};}
+global.gmlc_background);}function gml_RoomCC_rm_options_47_PreCreate(_inst,_other){_inst.gmltext="ENTER CCS";_inst.visible=false;_inst.gmlactive=false;_inst.x=-10000;_inst.y=-10000;_inst.gmlonClickAction=function(_i,_o){var _v=get_integer("Enter coach credits to add:","100");if(typeof _v!=="number"||!isFinite(_v)||_v<=0){return;}_v=Math.min(Math.floor(_v),2000000000);var _m=yyInst(_i,_o,97);_m.gmlcoach_credit=yyfplus(_m.gmlcoach_credit,_v);try{gml_Script_s_savegame(_i,_o);}catch(_e){}gml_Script_s_create_message(_i,_o,"","ADDED "+_v+" COACH CREDITS",gml_Script_s_str(_i,_o,"ui_Ok"),"",kgml_Script_s_msg_clear,"",global.gmlc_background,1);};}function gml_RoomCC_rm_options_48_PreCreate(_inst,_other){_inst.gmltext="COACH CREDITS";_inst.gmldraw_box=false;_inst.gmlhalign=2;_inst.visible=false;_inst.x=-10000;_inst.y=-10000;}function gml_RoomCC_rm_options_49_PreCreate(_inst,_other){_inst.gmltext="BLACKJACK";_inst.gmlonClickAction=function(_i,_o){rbBlackjack(_i,_o);};}
 function gml_RoomCC_rm_options_50_PreCreate(_inst,_other){_inst.gmltext="CASINO";_inst.gmldraw_box=false;_inst.gmlhalign=2;}
 function gml_RoomCC_rm_options_51_PreCreate(_inst,_other){
     _inst.gmltext="EXPORT";
@@ -7693,7 +7837,119 @@ function gml_RoomCC_rm_options_53_PreCreate(_inst,_other){
     };
 }
 function gml_RoomCC_rm_options_54_PreCreate(_inst,_other){_inst.gmltext="IMPORT DATA";_inst.gmldraw_box=false;_inst.gmlhalign=2;}
-
+function gml_RoomCC_rm_options_55_PreCreate(_inst,_other){
+    _inst.gmltext="ENTER";
+    _inst.gmlonClickAction=function(_i,_o){rbConsole(_i,_o);};
+}
+function gml_RoomCC_rm_options_56_PreCreate(_inst,_other){_inst.gmltext="CONSOLE";_inst.gmldraw_box=false;_inst.gmlhalign=2;}
+// ---- Console screen: blank screen with a "CONSOLE" header and a back arrow (bottom-left) ----
+var rbCon = null;
+function rbConsole(_i,_o){
+    rbCon = { downId: "" };
+    global.rbConOpen = true;
+}
+function rbConClose(){
+    rbCon = null; global.rbConOpen = false; global.rbBjCool = 4;
+}
+function rbConBack(){
+    var o = rbBjOff();
+    var w = 33, h = 34;
+    try { w = sprite_get_width(129); h = sprite_get_height(129); } catch (_e) {}
+    return { x: o.x + 8, y: o.y + 228, w: w, h: h };
+}
+function rbConCC(){
+    var o = rbBjOff();
+    var w = 71, h = 32;
+    try { w = sprite_get_width(126); h = sprite_get_height(126); } catch (_e) {}
+    return { x: o.x + 84, y: o.y + 44, w: w, h: h };
+}
+function rbConAddCCs(_i,_o){
+    var _v = get_integer("Enter coach credits to add:", "100");
+    if (typeof _v !== "number" || !isFinite(_v) || _v <= 0) { return; }
+    _v = Math.min(Math.floor(_v), 2000000000);
+    var _m = yyInst(_i, _o, 97);
+    _m.gmlcoach_credit = yyfplus(_m.gmlcoach_credit, _v);
+    try { gml_Script_s_savegame(_i, _o); } catch (_e) {}
+    gml_Script_s_create_message(_i, _o, "", "ADDED " + _v + " COACH CREDITS", gml_Script_s_str(_i, _o, "ui_Ok"), "", kgml_Script_s_msg_clear, "", global.gmlc_background, 1);
+    rbCon.msgWait = true;
+    global.rbConOpen = false;
+}
+function rbConStep(_i,_o){
+    if (rbCon.msgWait) {
+        if (yyGetBool(instance_exists(78))) { return; }
+        rbCon.msgWait = false; rbCon.downId = "";
+        global.rbConOpen = true; global.rbBjCool = 4;
+    }
+    var b = rbConBack();
+    var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+    var over = (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
+    var c = rbConCC();
+    var overCC = (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h);
+    if (yyGetBool(mouse_check_button_pressed(1))) { rbCon.downId = over ? "back" : (overCC ? "cc" : ""); }
+    if (yyGetBool(mouse_check_button_released(1))) {
+        var dn = rbCon.downId; rbCon.downId = "";
+        if (over && dn === "back") { rbBjSound(_i,_o); rbConClose(); return; }
+        if (overCC && dn === "cc") { rbBjSound(_i,_o); rbConAddCCs(_i,_o); return; }
+    }
+    if (yyGetBool(keyboard_check_pressed(27))) { rbBjSound(_i,_o); rbConClose(); }
+}
+function rbConDraw(_i,_o){
+    if (!rbCon) return;
+    if (rbCon.msgWait) return;
+    try {
+        var o = rbBjOff();
+        draw_set_alpha(1); draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1);
+        draw_set_color(global.gmlc_background); draw_rectangle(0, 0, o.w, o.h, 0);
+        // header copied from the Options room title (obj_roomtitle): big font, stars both sides
+        draw_set_font(global.gmlfnt_flex); draw_set_halign(1); draw_set_valign(1); draw_set_color(16777215);
+        var hTxt = "CONSOLE";
+        var hX = o.w * 0.5;
+        var hY = 16;
+        var hW = gml_Script_string_hd_width(_i, _o, hTxt) * 0.5 + sprite_get_width(123) + 16;
+        gml_Script_draw_hd_text(_i, _o, hX, hY, hTxt);
+        draw_sprite_ext(_i, 123, 0, hX - hW, hY, 2, 2, 0, 16777215, 1);
+        draw_sprite_ext(_i, 123, 0, hX + hW - 2, hY, -2, 2, 0, 16777215, 1);
+        draw_set_valign(1);
+        var b = rbConBack();
+        var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+        var over = (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
+        var pressed = over && yyGetBool(mouse_check_button(1)) && rbCon.downId === "back";
+        draw_set_alpha(1);
+        var bx = b.x, by = b.y;
+        var ix = b.x + Math.floor(b.w / 2) + 1, iy = b.y + Math.floor(b.h / 2) - 1;
+        if (!pressed) {
+            draw_sprite(_i, 129, 0, bx, by);
+            draw_sprite_ext(_i, 129, 2, bx, by, 1, 1, 0, global.gmlc_background, 1);
+        } else {
+            draw_sprite(_i, 129, 1, bx, by);
+            draw_sprite_ext(_i, 129, 2, bx - 2, by + 2, 1, 1, 0, global.gmlc_background, 1);
+            ix -= 2; iy += 2;
+        }
+        draw_sprite(_i, 142, 0, ix, iy);
+        // COACH CREDITS control (moved here from Options) - uses the game's real button sprite (126)
+        var c = rbConCC();
+        var overC = (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h);
+        var prC = overC && yyGetBool(mouse_check_button(1)) && rbCon.downId === "cc";
+        var tx = c.x + Math.floor(c.w / 2) + 1, ty = c.y + Math.floor(c.h / 2) - 1;
+        draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1);
+        if (!prC) {
+            draw_sprite(_i, 126, 0, c.x, c.y);
+            draw_sprite_ext(_i, 126, 2, c.x, c.y, 1, 1, 0, global.gmlc_background, 1);
+        } else {
+            draw_sprite(_i, 126, 1, c.x, c.y);
+            draw_sprite_ext(_i, 126, 2, c.x - 2, c.y + 2, 1, 1, 0, global.gmlc_background, 1);
+            tx -= 2; ty += 2;
+        }
+        rbBjT(tx, ty, "ENTER CCS", 1, 16777215, 1);
+        rbBjT(c.x - 3, c.y + Math.floor(c.h / 2) - 6, "COACH", 2, 16777215, 1);
+        rbBjT(c.x - 3, c.y + Math.floor(c.h / 2) + 8, "CREDITS", 2, 16777215, 1);
+        draw_set_halign(0); draw_set_color(16777215); draw_set_alpha(1);
+    } catch (_e) {
+        try { console.error("console draw error", _e); } catch (_x) {}
+        rbConClose();
+        draw_set_halign(0); draw_set_color(16777215); draw_set_alpha(1);
+    }
+}
 // ---- Blackjack: native in-game table (drawn by the game's own GUI events, no browser dialogs) ----
 // Rules: dealer stands on all 17s, blackjack pays 3:2, double down on your first two cards.
 // Mouse/touch buttons, or keys: H hit, S stand, D double, Enter/Space deal or play again, Esc leave.
@@ -7712,7 +7968,7 @@ function rbBjTotal(h) {
     return t;
 }
 function rbBjIsBJ(h) { return h.length === 2 && rbBjTotal(h) === 21; }
-function rbBjBlocking() { return global.rbBjOpen === true || global.rbBjCool > 0; }
+function rbBjBlocking() { return global.rbBjOpen === true || global.rbConOpen === true || global.rbBjCool > 0; }
 function rbBjCredits(_i, _o) { var n = Number(yyInst(_i, _o, 97).gmlcoach_credit); return isFinite(n) ? n : 0; }
 function rbBjGive(_i, _o, n) { yyInst(_i, _o, 97).gmlcoach_credit = Math.min(2000000000, Math.max(0, rbBjCredits(_i, _o) + n)); }
 function rbBjSound(_i, _o) { try { if (yyGetBool(ds_map_find_value(yyInst(_i, _o, 97).gmlmap_options, "op_soundfx"))) { audio_play_sound(5, 1, false); } } catch (_e) {} }
@@ -7873,6 +8129,7 @@ function rbBjStep(_i, _o) {
 
 function rbBjTick(_i, _o) {
     if (global.rbBjCool > 0) { global.rbBjCool--; }
+    if (rbCon) { try { rbConStep(_i, _o); } catch (_e) { try { console.error("console error", _e); } catch (_x) {} rbConClose(); } return; }
     if (!rbBj) return;
     try { rbBjStep(_i, _o); }
     catch (_e) { try { console.error("blackjack error", _e); } catch (_x) {} rbBjAbort(); }
@@ -7982,7 +8239,7 @@ function rbBjDraw(_i, _o) {
         draw_set_halign(0); draw_set_color(16777215); draw_set_alpha(1);
     }
 }
-function gml_Object_obj_master_Draw_75(_inst, _other) { rbBjDraw(_inst, _other); }
+function gml_Object_obj_master_Draw_75(_inst, _other) { rbBjDraw(_inst, _other); rbConDraw(_inst, _other); }
 function gml_RoomCC_rm_options_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Options");}function gml_RoomCC_rm_options_1_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_Options_Exit;_inst.gmlimage=159;_inst.gmlgp_mapped_hidden=global.gmlgp_back;}function gml_RoomCC_rm_options_2_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsDriveLeft;}function gml_RoomCC_rm_options_3_PreCreate(_inst,_other){_inst.gmldraw_box=false;
 _inst.gmlhalign=2;_inst.gmlfont=global.gmlfnt_small_flex;}function gml_RoomCC_rm_options_4_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsWeather;}function gml_RoomCC_rm_options_6_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsSoundFX;}function gml_RoomCC_rm_options_7_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsZoom;}function gml_RoomCC_rm_options_8_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,
 "ui_Credits");_inst.gmldraw_box=false;}function gml_RoomCC_rm_options_9_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsMatchLength;}function gml_RoomCC_rm_options_11_PreCreate(_inst,_other){_inst.gmlgoogle=true;}function gml_RoomCC_rm_options_12_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsTeamEditor;_inst.gmlimage=148;}function gml_RoomCC_rm_options_13_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsDifficulty;}

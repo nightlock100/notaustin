@@ -299,7 +299,7 @@ attitude_2	Poor
 attitude_3	Ok
 attitude_4	Good
 attitude_5	Great
-attitude_6	very happy :D
+attitude_6	Thrilled
 ui_Attitude	Morale
 ui_Rating	Rating
 ui_Age	Age
@@ -649,7 +649,7 @@ match_Receive	Receive
 news_firstmatchWin	$yourname's first game in charge of $teamname1 ended with a win against $teamname2.##The $teamname1 fans will be looking forward to next season now with renewed hope.
 news_firstmatchLoss	$yourname's first game in charge of $teamname1 ended in defeat against $teamname2.##$yourlastname will be left in no doubt about how much work there is to do to turn this team's fortunes around.
 news_firstmatchTie	$yourname managed to avoid defeat after taking charge of $teamname1.##$yourlastname will be hoping for a good draft to boost their playoff chances next season.
-coachtrait_0	frickin loser
+coachtrait_0	None
 coachtrait_1	Experience
 coachtrait_2	Talent Spotter
 coachtrait_3	Motivator
@@ -749,12 +749,12 @@ pos_2	2nd
 pos_3	3rd
 pos_4	4th
 finish_Regular	No
-finish_WildCard	Round 1
-finish_Divisional	CFB Quarters
-finish_Championship	CFB Semis
-finish_Champ_AFC	FBS I Champs
-finish_Champ_NFC	RBS II Champs
-finish_SuperBowl	FBS CHAMPS
+finish_WildCard	Wild Card
+finish_Divisional	Divisional
+finish_Championship	Champs
+finish_Champ_AFC	AFC Champs
+finish_Champ_NFC	NFC Champs
+finish_SuperBowl	Super Bowl Champions
 ui_History	History
 ui_Finished	Finished
 ui_Record	Record
@@ -779,7 +779,7 @@ ui_Done	Done
 ui_Close	Close
 btn_RestorePurchases	Restore#Purchases
 ui_Connecting	Connecting...
-ui_FavouriteTeam	who u like
+ui_FavouriteTeam	Fav Team
 msg_Welcome_CO	Welcome to Retro Bowl College!##You are about to start your first season as the head coach of a college football team.##The path to success is an arduous one but if you believe in yourself and can inspire your team then glory awaits!#
 
 msg_Welcome	Welcome to Retro Bowl!##You are about to start your first season as the head coach of a pro football team.##The path to success is an arduous one but if you believe in yourself and can inspire your team then glory awaits!#
@@ -922,13 +922,13 @@ tla_Percentage	Pct
 info_Options_Difficulty	When set to Dyanmic the game difficulty will adjust automatically, getting harder when you win games or easier if you lose. The EXTREME setting makes all opponents play with a 5 star rating regardless of what their actual rating is.
 ui_Save	Save
 ui_ReturnToLoad	Return To#Load Screen
-ui_PlayerHallOfFame	the real ones
-msg_RemoveFromHallOfFame	Do you want to remove this player from the the real ones? This cannot be undone.
+ui_PlayerHallOfFame	Hall of Fame
+msg_RemoveFromHallOfFame	Do you want to remove this player from the HOF? This cannot be undone.
 ui_Remove	Remove
 ui_PlayerHallOfFameEmpty	To put players in your the real ones you need to tag them in the top-left corner of their profile page.
 msg_HofListTooBig	There is no room in the the real ones! Please remove a player before tagging a new one.
 msg_TradeAwayRookie	Warning! Trading a recently signed player has a negative impact on team morale and your fan relationship!
-ui_RetroBowlWinners	Retro Bowl Winners
+ui_RetroBowlWinners	Super Bowl Winners
 btn_RetroBowls	Retro   #Bowls
 btn_PlayerHallOfFame	Player   #HOF
 ui_YourHistory	Your History
@@ -1000,9 +1000,9 @@ ui_Champions	Champions
 Champions	Champions
 ui_HeadCoach	Head Coach
 ui_TrainingRegime	Training Regime
-ui_TrainingLight	wussy
+ui_TrainingLight	Light
 ui_TrainingNormal	normal
-ui_TrainingHard	concentracion camp
+ui_TrainingHard	Intense
 info_TrainingRegime	Setting the training regime to HARD will help players to gain more XP per game. However they will consume more energy, be less happy and their risk of injury is increased.##LIGHT training conserves energy, increases morale and reduces injury risk but XP will be gained at a slower rate than normal.
 news_mvp	$position $playername won the league award for MVP!
 news_roty	$position $playername won the league award for Rookie of the Year!
@@ -1121,7 +1121,7 @@ tla_Week	Wk
 tla_WildCard	WC
 tla_PlayOff	PO
 tla_Champion	CH
-tla_SuperBowl	RB
+tla_SuperBowl	SB
 match_Punt	Punt
 msg_OnSideKick	Do you want to try an onside kick? You will have a $num% chance of recovering the ball.
 match_OnsideKicking	$teamname try the onside kick!
@@ -1271,8 +1271,8 @@ short_Interceptions	Int
 short_ForcedFumbles	F.Fmb
 ui_SeasonReview	Season Review
 ui_Review	Review
-msg_TagMessageHOF	This tag allows you to select a player for your franchise the real ones. His stats will be recorded even after he leaves the team or retires.
-msg_TagMessageKR	WRs, RBs and DBs can be selected as a Kick Returner. They will catch and return the ball from kick offs.##You can only assign one kick returner.
+msg_TagMessageHOF	This tag allows you to select a player for your franchise HoF. His stats will be recorded even after he leaves the team or retires.
+msg_TagMessageKR	WRs, RBs and CBs can be selected as a Kick Returner. They will catch and return the ball from kick offs.##You can only assign one kick returner.
 msg_KickReturns	You can now choose a player to return kickoffs!##Simply head over to the player profile of any RB, WR or DB and select the green tag in the top-left corner of the screen.
 msg_TouchBack	TOUCHBACKS#If your kick returner receives a kickoff in the end zone you can attempt a DIVE to initiate a touchback. You will then start your drive from the 25 yard line.
 btn_KickReturns	Kickoff#Returns
