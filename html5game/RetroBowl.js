@@ -1,4 +1,97 @@
-﻿function getUserColorFromSaveData() {
+﻿function rbN(x){ return (x && x.toNumber) ? x.toNumber() : Number(x); }
+function rbSlot(week, tid){
+    var slots = ["THU 8:15PM TNF","SUN 1:00PM","SUN 1:00PM","SUN 1:00PM","SUN 4:25PM","SUN 4:25PM","SUN 8:20PM SNF","MON 8:15PM MNF"];
+    var h = ((rbN(week)*31 + rbN(tid)*17) % slots.length + slots.length) % slots.length;
+    if (isNaN(h)) h = 1;
+    return slots[h];
+}
+
+function rbPlayoffLabel(_inst,_other){
+    try{ return String(gml_Script_s_get_string_week(_inst,_other,0)).toUpperCase(); }catch(e){ return ""; }
+}
+function rbPrimetime(_inst,_other){
+    try{
+        var g = yyInst(_inst,_other,97);
+        if (global.gmlexhibition) return "";
+        if (rbN(g.gmlweek) > rbN(g.gmllast_week_regular)){
+            var lab = rbPlayoffLabel(_inst,_other);
+            var has = function(k){ return lab.indexOf(String(gml_Script_s_str(_inst,_other,k)).toUpperCase()) >= 0; };
+            if (has("ui_SuperBowl")) return "SB";
+            if (has("ui_Champion")) return (lab.indexOf("AFC") >= 0) ? "AFC" : "NFC";
+            if (has("ui_PlayOff")) return "DIV";
+            if (has("ui_WildCard")) return "WC";
+            return "";
+        }
+        var s = rbSlot(g.gmlweek, g.gmlmyteam_id);
+        if (s.indexOf("TNF") >= 0) return "TNF";
+        if (s.indexOf("SNF") >= 0) return "SNF";
+        if (s.indexOf("MNF") >= 0) return "MNF";
+    }catch(e){}
+    return "";
+}
+function rbIsSNF(_inst,_other){ return rbPrimetime(_inst,_other) === "SNF"; }
+function rbSnfBar(_inst,_other,L,R,H,c1,c2){
+    var k = rbPrimetime(_inst,_other);
+    if (k === "") return;
+    var trim, nt, nb, s, tabfill, tabtxt;
+    if (k === "TNF"){
+        trim = make_color_rgb(0,229,255);
+        nt = make_color_rgb(4,4,8);   nb = make_color_rgb(24,26,34);
+        s = "THURSDAY NIGHT FOOTBALL";
+    } else if (k === "MNF"){
+        trim = make_color_rgb(215,220,230);
+        nt = make_color_rgb(40,6,12); nb = make_color_rgb(88,14,26);
+        s = "MONDAY NIGHT FOOTBALL";
+    } else if (k === "WC"){
+        trim = make_color_rgb(240,240,240);
+        nt = make_color_rgb(6,36,16); nb = make_color_rgb(18,84,40);
+    } else if (k === "DIV"){
+        trim = make_color_rgb(255,140,30);
+        nt = make_color_rgb(26,8,46); nb = make_color_rgb(66,24,112);
+    } else if (k === "AFC"){
+        trim = make_color_rgb(205,210,220);
+        nt = make_color_rgb(46,4,8);  nb = make_color_rgb(120,10,22);
+    } else if (k === "NFC"){
+        trim = make_color_rgb(225,240,255);
+        nt = make_color_rgb(6,20,60); nb = make_color_rgb(16,60,140);
+    } else if (k === "SB"){
+        trim = make_color_rgb(255,222,70);
+        nt = make_color_rgb(120,84,6); nb = make_color_rgb(200,150,24);
+        s = "SUPER BOWL";
+    } else {
+        trim = make_color_rgb(255,196,64);
+        nt = make_color_rgb(8,12,34); nb = make_color_rgb(22,30,70);
+        s = "SUNDAY NIGHT FOOTBALL";
+    }
+    if (k === "WC" || k === "DIV" || k === "AFC" || k === "NFC"){
+        s = rbPlayoffLabel(_inst,_other).replace(/\s*\d+$/,"");
+        if (k === "DIV") s = s.replace("PLAYOFF","DIVISIONAL");
+        if ((k === "AFC" || k === "NFC") && s.indexOf("CHAMPIONSHIP") < 0) s = s.replace("CHAMPION","CHAMPIONSHIP");
+    }
+    tabfill = (k === "SB") ? trim : nt;
+    tabtxt  = (k === "SB") ? make_color_rgb(60,36,0) : trim;
+    var L2 = L-26, R2 = R+26, mid = (L+R)/2;
+    draw_set_alpha(0.96);
+    draw_rectangle_colour(L2,0,R2,H,nt,nt,nb,nb,0);
+    draw_set_alpha(k === "SB" ? 0.35 : 0.5);
+    draw_rectangle_colour(L,2,mid,H-2,c1,c1,c1,c1,0);
+    draw_rectangle_colour(mid,2,R,H-2,c2,c2,c2,c2,0);
+    draw_set_alpha(1);
+    draw_rectangle_colour(L2,0,R2,2,trim,trim,trim,trim,0);
+    draw_rectangle_colour(L2,H-2,R2,H,trim,trim,trim,trim,0);
+    draw_rectangle_colour(L2,0,L2+3,H,trim,trim,trim,trim,0);
+    draw_rectangle_colour(R2-3,0,R2,H,trim,trim,trim,trim,0);
+    draw_set_halign(1); draw_set_valign(1);
+    var w = gml_Script_string_hd_width(_inst,_other,s)/2 + 10;
+    draw_rectangle_colour(mid-w,H,mid+w,H+16,tabfill,tabfill,tabfill,tabfill,0);
+    draw_rectangle_colour(mid-w,H,mid+w,H+16,trim,trim,trim,trim,1);
+    draw_set_colour(tabtxt);
+    gml_Script_draw_hd_text(_inst,_other,mid,H+9,s);
+    draw_set_colour(16777215);
+    draw_set_halign(0); draw_set_valign(1);
+}
+
+function getUserColorFromSaveData() {
     // Attempt to read the localStorage key
     const savedData = localStorage.getItem("RetroBowl.0.savedata.ini");
     
@@ -5252,7 +5345,7 @@ false)==0||yyCompareVal(___sw1126___,16,g_GMLMathEpsilon,false)==0||yyCompareVal
 gml_Script_draw_hd_text(_inst,_other,gmltx,yyfplus(__yy_gml_errCheck(gmlty),32),yyfplus("  ",__yy_gml_errCheck(gml_Script_s_get_string_commstage(_inst,_other,_inst.gmllast_stage))));};};gml_Script_draw_hd_text_ext_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),_inst.gmlcomm_txt,(-1),(-1),0,0,0,0,1);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,_inst.gmlcomm_txt);};};if((yyGetBool(!yyGetBool(global.gmlgamepad)))&&(yyGetBool(yyfnotequal(_inst.gmltap_msg,
 "")))&&(yyGetBool(!yyGetBool(instance_exists(34))))){{gmlty=yyftime(__yy_gml_errCheck(display_get_gui_height()),0.75);var gmltw=yyfplus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gml_Script_string_hd_width(_inst,_other,_inst.gmltap_msg)),0.5)),__yy_gml_errCheck(gmlbuf));draw_sprite_ext(_inst,376,0,yyfminus(__yy_gml_errCheck(gmltx),__yy_gml_errCheck(gmltw)),yyfminus(__yy_gml_errCheck(gmlty),__yy_gml_errCheck(gmlbuf)),yyftime(__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(gmltw),16)),2),1.1,0,0,1);
 gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,_inst.gmltap_msg);};};}}function gml_GlobalScript_s_draw_scoreboard(_inst,_other){(_inst.gmls_draw_scoreboard=__yy_method(_inst,gml_Script_s_draw_scoreboard));}function gml_Script_s_draw_scoreboard(_inst,_other){{if(yyGetBool(yyInst(_inst,_other,97).gmlgamepractice)){{gml_Script_s_draw_scoreboard_qb_training(_inst,_other);return;};};if(yyGetBool(global.gmldebug_aa_hide_ui)){{return;};};draw_set_font(global.gmlfnt_small_flex);draw_set_halign(0);draw_set_valign(1);
-var gmlsw=display_get_gui_width()*0.375;var gmlbarHeight=35.2;var gmlbarLeft=(display_get_gui_width()-gmlsw)/2;var gmlbarRight=(display_get_gui_width()+gmlsw)/2;draw_set_alpha(0.82);draw_rectangle_colour(gmlbarLeft,0,gmlbarRight,gmlbarHeight-2,1118481,1118481,1118481,1118481,0);draw_rectangle_colour(gmlbarLeft+0.6,gmlbarHeight-2,gmlbarRight-0.6,gmlbarHeight-1,1118481,1118481,1118481,1118481,0);draw_rectangle_colour(gmlbarLeft+1.6,gmlbarHeight-1,gmlbarRight-1.6,gmlbarHeight,1118481,1118481,1118481,1118481,0);draw_set_alpha(0.24);var gmlpal1=rbScoreboardPal(_inst,_other,ds_map_find_value(_inst.gmlteam[0],"uid"))||yyInst(_inst,_other,97).gmlcol_endzone_away;var gmlpal2=rbScoreboardPal(_inst,_other,ds_map_find_value(_inst.gmlteam[1],"uid"))||yyInst(_inst,_other,97).gmlcol_endzone_home;var gmlc1=make_color_rgb(yyftime(gmlpal1[__yy_gml_array_check_index(2,gmlpal1)],256),yyftime(gmlpal1[__yy_gml_array_check_index(1,gmlpal1)],256),yyftime(gmlpal1[__yy_gml_array_check_index(0,gmlpal1)],256));var gmlc2=make_color_rgb(yyftime(gmlpal2[__yy_gml_array_check_index(2,gmlpal2)],256),yyftime(gmlpal2[__yy_gml_array_check_index(1,gmlpal2)],256),yyftime(gmlpal2[__yy_gml_array_check_index(0,gmlpal2)],256));draw_rectangle_colour(gmlbarLeft,0,display_get_gui_width()/2,gmlbarHeight,gmlc1,gmlc1,gmlc1,gmlc1,0);draw_rectangle_colour(display_get_gui_width()/2,0,gmlbarRight,gmlbarHeight,gmlc2,gmlc2,gmlc2,gmlc2,0);draw_set_alpha(1);var gmlty1=17.6;var gmlname1=ds_map_find_value(_inst.gmlteam[__yy_gml_array_check_index(0,_inst.gmlteam)],"tla");var gmlname2=ds_map_find_value(_inst.gmlteam[__yy_gml_array_check_index(1,_inst.gmlteam)],"tla");var gmlscore1=string(_inst.gmlteam_score[__yy_gml_array_check_index(0,_inst.gmlteam_score)]);var gmlscore2=string(_inst.gmlteam_score[__yy_gml_array_check_index(1,_inst.gmlteam_score)]);var gmllefttxt=yyfplus(yyfplus(gmlname1," "),gmlscore1);var gmlrighttxt=yyfplus(yyfplus(gmlname2," "),gmlscore2);var gmltxt=yyfplus(yyfplus(gmllefttxt,"  "),gmlrighttxt);var gmlto_len=gml_Script_string_hd_width(_inst,_other,gmllefttxt);var gmltotalwidth=gml_Script_string_hd_width(_inst,_other,gmltxt);var gmltx=(display_get_gui_width()-gmltotalwidth)/2;var gmlleftwidth=gml_Script_string_hd_width(_inst,_other,yyfplus(gmlname1," "));var gmlrightx=gmltx+gmlto_len+gml_Script_string_hd_width(_inst,_other,"  ");draw_set_colour(16777215);if(yyGetBool(global.gmlhd_fonts)){draw_text_transformed_color(gmltx+gml_Script_string_hd_width(_inst,_other,yyfplus(gmlscore1," ")),gmlty1,yyfplus(gmlname1," "),0.33,0.33,0,gmlc1,gmlc1,gmlc1,gmlc1,1);}else{draw_text_color(gmltx+gml_Script_string_hd_width(_inst,_other,yyfplus(gmlscore1," ")),gmlty1,yyfplus(gmlname1," "),gmlc1,gmlc1,gmlc1,gmlc1,1);}
+var gmlsw=display_get_gui_width()*0.375;var gmlbarHeight=35.2;var gmlbarLeft=(display_get_gui_width()-gmlsw)/2;var gmlbarRight=(display_get_gui_width()+gmlsw)/2;draw_set_alpha(0.82);draw_rectangle_colour(gmlbarLeft,0,gmlbarRight,gmlbarHeight-2,1118481,1118481,1118481,1118481,0);draw_rectangle_colour(gmlbarLeft+0.6,gmlbarHeight-2,gmlbarRight-0.6,gmlbarHeight-1,1118481,1118481,1118481,1118481,0);draw_rectangle_colour(gmlbarLeft+1.6,gmlbarHeight-1,gmlbarRight-1.6,gmlbarHeight,1118481,1118481,1118481,1118481,0);draw_set_alpha(0.24);var gmlpal1=rbScoreboardPal(_inst,_other,ds_map_find_value(_inst.gmlteam[0],"uid"))||yyInst(_inst,_other,97).gmlcol_endzone_away;var gmlpal2=rbScoreboardPal(_inst,_other,ds_map_find_value(_inst.gmlteam[1],"uid"))||yyInst(_inst,_other,97).gmlcol_endzone_home;var gmlc1=make_color_rgb(yyftime(gmlpal1[__yy_gml_array_check_index(2,gmlpal1)],256),yyftime(gmlpal1[__yy_gml_array_check_index(1,gmlpal1)],256),yyftime(gmlpal1[__yy_gml_array_check_index(0,gmlpal1)],256));var gmlc2=make_color_rgb(yyftime(gmlpal2[__yy_gml_array_check_index(2,gmlpal2)],256),yyftime(gmlpal2[__yy_gml_array_check_index(1,gmlpal2)],256),yyftime(gmlpal2[__yy_gml_array_check_index(0,gmlpal2)],256));draw_rectangle_colour(gmlbarLeft,0,display_get_gui_width()/2,gmlbarHeight,gmlc1,gmlc1,gmlc1,gmlc1,0);draw_rectangle_colour(display_get_gui_width()/2,0,gmlbarRight,gmlbarHeight,gmlc2,gmlc2,gmlc2,gmlc2,0);rbSnfBar(_inst,_other,gmlbarLeft,gmlbarRight,gmlbarHeight,gmlc1,gmlc2);draw_set_alpha(1);var gmlty1=17.6;var gmlname1=ds_map_find_value(_inst.gmlteam[__yy_gml_array_check_index(0,_inst.gmlteam)],"tla");var gmlname2=ds_map_find_value(_inst.gmlteam[__yy_gml_array_check_index(1,_inst.gmlteam)],"tla");var gmlscore1=string(_inst.gmlteam_score[__yy_gml_array_check_index(0,_inst.gmlteam_score)]);var gmlscore2=string(_inst.gmlteam_score[__yy_gml_array_check_index(1,_inst.gmlteam_score)]);var gmllefttxt=yyfplus(yyfplus(gmlname1," "),gmlscore1);var gmlrighttxt=yyfplus(yyfplus(gmlname2," "),gmlscore2);var gmltxt=yyfplus(yyfplus(gmllefttxt,"  "),gmlrighttxt);var gmlto_len=gml_Script_string_hd_width(_inst,_other,gmllefttxt);var gmltotalwidth=gml_Script_string_hd_width(_inst,_other,gmltxt);var gmltx=(display_get_gui_width()-gmltotalwidth)/2;var gmlleftwidth=gml_Script_string_hd_width(_inst,_other,yyfplus(gmlname1," "));var gmlrightx=gmltx+gmlto_len+gml_Script_string_hd_width(_inst,_other,"  ");draw_set_colour(16777215);if(yyGetBool(global.gmlhd_fonts)){draw_text_transformed_color(gmltx+gml_Script_string_hd_width(_inst,_other,yyfplus(gmlscore1," ")),gmlty1,yyfplus(gmlname1," "),0.33,0.33,0,gmlc1,gmlc1,gmlc1,gmlc1,1);}else{draw_text_color(gmltx+gml_Script_string_hd_width(_inst,_other,yyfplus(gmlscore1," ")),gmlty1,yyfplus(gmlname1," "),gmlc1,gmlc1,gmlc1,gmlc1,1);}
 if(yyGetBool(global.gmlhd_fonts)){draw_text_transformed_color(gmltx,gmlty1,gmlscore1,0.33,0.33,0,gmlc1,gmlc1,gmlc1,gmlc1,1);}else{draw_text_color(gmltx,gmlty1,gmlscore1,gmlc1,gmlc1,gmlc1,gmlc1,1);}if(yyGetBool(global.gmlhd_fonts)){draw_text_transformed_color(gmltx+gmlto_len+gml_Script_string_hd_width(_inst,_other,"  "),gmlty1,yyfplus(gmlname2," "),0.33,0.33,0,gmlc2,gmlc2,gmlc2,gmlc2,1);}else{draw_text_color(gmltx+gmlto_len+gml_Script_string_hd_width(_inst,_other,"  "),gmlty1,yyfplus(gmlname2," "),gmlc2,gmlc2,gmlc2,gmlc2,1);}
 if(yyGetBool(global.gmlhd_fonts)){draw_text_transformed_color(gmlrightx+gml_Script_string_hd_width(_inst,_other,yyfplus(gmlname2," ")),gmlty1,gmlscore2,0.33,0.33,0,gmlc2,gmlc2,gmlc2,gmlc2,1);}else{draw_text_color(gmlrightx+gml_Script_string_hd_width(_inst,_other,yyfplus(gmlname2," ")),gmlty1,gmlscore2,gmlc2,gmlc2,gmlc2,gmlc2,1);}draw_set_colour(16777215);{var __yy__v1303=GetWithArray(104);for(var __yy__v1304 in __yy__v1303){if(!__yy__v1303.hasOwnProperty(__yy__v1304))continue;var __yy__v1305=__yy__v1303[__yy__v1304];{var rbEdgeL=gmlbarLeft+4;var rbEdgeR=gmlbarRight-4;var rbStep=gmlbarHeight/4;var rbN1=0;var rbN2=0;if((yyGetBool(global.gmlexhibition))&&(yyGetBool(yyfequal(yyInst(_inst,_other,97).gmlplayerteamindex,(-1))))){rbN1=__yy__v1305.gmltimeouts;rbN2=__yy__v1305.gmltimeouts_p2;}else{var rbC=gml_Script_s_count_timeouts(__yy__v1305,_inst);var rbF=0;var rbMy=yyInst(_inst,_other,97).gmlmyteam;var rbMeL=(yyfequal(_inst.gmlteam[0],rbMy))||(yyfequal(ds_map_find_value(_inst.gmlteam[0],"uid"),ds_map_find_value(rbMy,"uid")));var rbMeR=(yyfequal(_inst.gmlteam[1],rbMy))||(yyfequal(ds_map_find_value(_inst.gmlteam[1],"uid"),ds_map_find_value(rbMy,"uid")));if(rbMeL){rbN1=rbC;rbN2=rbF;}else{if(rbMeR){rbN2=rbC;rbN1=rbF;}else{if(yyfequal(__yy__v1305.gmlhuman_team,1)){rbN2=rbC;rbN1=rbF;}else{rbN1=rbC;rbN2=rbF;}}}}for(var rbI=0;yyfless(rbI,rbN1);rbI++){draw_line_width(rbEdgeL,rbStep*(rbI+1)-3,rbEdgeL,rbStep*(rbI+1)+3,2);}for(var rbJ=0;yyfless(rbJ,rbN2);rbJ++){draw_line_width(rbEdgeR,rbStep*(rbJ+1)-3,rbEdgeR,rbStep*(rbJ+1)+3,2);}var gmlto_x=gmltx;var gmlto_y=-1000;if((yyGetBool(global.gmlexhibition))&&(yyGetBool(yyfequal(yyInst(_inst,_other,97).gmlplayerteamindex,(-1))))){{var gmli=0;for(;yyfless(gmli,__yy__v1305.gmltimeouts);(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{draw_line_width(gmlto_x,gmlto_y,yyfplus(__yy_gml_errCheck(gmlto_x),6),gmlto_y,2);gmlto_x=yyfplus(gmlto_x,8);}};gmlto_x=yyfplus(__yy_gml_errCheck(gmltx),__yy_gml_errCheck(gmlto_len));var gmli=0;for(;yyfless(gmli,__yy__v1305.gmltimeouts_p2);(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),
 g_yyPrePostObject__)){{draw_line_width(gmlto_x,gmlto_y,yyfplus(__yy_gml_errCheck(gmlto_x),6),gmlto_y,2);gmlto_x=yyfplus(gmlto_x,8);}};};}else {{if(yyfequal(__yy__v1305.gmlhuman_team,1)){gmlto_x=yyfplus(gmlto_x,gmlto_len);};var gmli=0;for(;yyfless(gmli,gml_Script_s_count_timeouts(__yy__v1305,_inst));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{draw_line_width(gmlto_x,gmlto_y,yyfplus(__yy_gml_errCheck(gmlto_x),6),gmlto_y,2);gmlto_x=yyfplus(gmlto_x,
@@ -6861,7 +6954,7 @@ _other,97).gmlteamlist,gmlteamid_away);var gmlteam_home=ds_list_find_value(yyIns
 _other,gmli);if(yyGetBool(gmlfixture)){{gmlteamid_away=ds_map_find_value(gmlfixture,"away_team");gmlteamid_home=ds_map_find_value(gmlfixture,"home_team");gmlaway_score=ds_map_find_value(gmlfixture,"away_score");gmlhome_score=ds_map_find_value(gmlfixture,"home_score");if((yyGetBool(yyfgreater(gmlteamid_away,(-1))))&&(yyGetBool(yyfgreater(gmlteamid_home,(-1))))){{var gmlteam_away=ds_list_find_value(yyInst(_inst,_other,97).gmlteamlist,gmlteamid_away);var gmlteam_home=ds_list_find_value(yyInst(_inst,_other,
 97).gmlteamlist,gmlteamid_home);gmlopp_name=yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlteam_away,"tla"))," - "),__yy_gml_errCheck(ds_map_find_value(gmlteam_home,"tla")));if(yyfgreater(gmlaway_score,(-1))){{gmlscoreline=yyfplus(yyfplus(__yy_gml_errCheck(string(gmlaway_score)),"-"),__yy_gml_errCheck(string(gmlhome_score)));};};};};};};};};};};};if((yyGetBool((yyGetBool(!yyGetBool(gml_Script_s_is_co_real(_inst,_other))))&&(yyGetBool(yyfless(gmli,yyInst(_inst,_other,97).gmllast_week_regular)))))||(yyGetBool((yyGetBool(gml_Script_s_is_co_real(_inst,
 _other)))&&(yyGetBool(yyfless(gmli,gml_Script_s_get_last_schedule_week(_inst,_other))))))){{draw_line_width_colour(gmlsx,gmlsy,yyfplus(__yy_gml_errCheck(gmlsx),__yy_gml_errCheck(_inst.gmlgap)),gmlsy,4,gmlrescol,gmlnextrescol);draw_line_width_colour(gmlsx,yyfplus(__yy_gml_errCheck(gmlsy),1),yyfplus(__yy_gml_errCheck(gmlsx),__yy_gml_errCheck(_inst.gmlgap)),yyfplus(__yy_gml_errCheck(gmlsy),1),2,4210752,4210752);};}else {if(yyfless(gmli,_inst.gmlline_nodes)){{draw_line_width_colour(gmlsx,gmlsy,yyfplus(__yy_gml_errCheck(gmlsx),
-__yy_gml_errCheck(_inst.gmlgap)),gmlsy,4,12632256,12632256);draw_line_width_colour(gmlsx,yyfplus(__yy_gml_errCheck(gmlsy),1),yyfplus(__yy_gml_errCheck(gmlsx),__yy_gml_errCheck(_inst.gmlgap)),yyfplus(__yy_gml_errCheck(gmlsy),1),2,4210752,4210752);};};};var gmlwk;if(yyGetBool(gml_Script_s_is_co_real(_inst,_other))){gmlwk=gml_Script_s_get_week_name(_inst,_other,gmli);}else {gmlwk=string_upper(gml_Script_s_get_string_week(_inst,_other,gmli));};gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmlsx),
+__yy_gml_errCheck(_inst.gmlgap)),gmlsy,4,12632256,12632256);draw_line_width_colour(gmlsx,yyfplus(__yy_gml_errCheck(gmlsy),1),yyfplus(__yy_gml_errCheck(gmlsx),__yy_gml_errCheck(_inst.gmlgap)),yyfplus(__yy_gml_errCheck(gmlsy),1),2,4210752,4210752);};};};var gmlwk;if(yyGetBool(gml_Script_s_is_co_real(_inst,_other))){gmlwk=gml_Script_s_get_week_name(_inst,_other,gmli);}else {gmlwk=string_upper(gml_Script_s_get_string_week(_inst,_other,gmli));};if(yyGetBool(gmlfixture)){gmlwk=gmlwk+" "+rbSlot(gmli,yyInst(_inst,_other,97).gmlmyteam_id);};gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmlsx),
 1),yyfminus(__yy_gml_errCheck(_inst.y),27),gmlwk,0,0,0,0,1);gml_Script_draw_hd_text(_inst,_other,gmlsx,yyfminus(__yy_gml_errCheck(_inst.y),28),gmlwk);var gmlcol=0;gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmlsx),1),yyfminus(__yy_gml_errCheck(_inst.y),9),gmlopp_name,gmlcol,gmlcol,gmlcol,gmlcol,1);gml_Script_draw_hd_text(_inst,_other,gmlsx,yyfminus(__yy_gml_errCheck(_inst.y),10),gmlopp_name);gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmlsx),1),
 yyfplus(__yy_gml_errCheck(_inst.y),25),gmlscoreline,gmlcol,gmlcol,gmlcol,gmlcol,1);gml_Script_draw_hd_text(_inst,_other,gmlsx,yyfplus(__yy_gml_errCheck(_inst.y),24),gmlscoreline);draw_sprite_ext(_inst,100,0,gmlsx,gmlsy,1,1,0,gmlrescol,1);if(yyGetBool(_inst.gmlshow_difficulty)){{if((yyGetBool(gmlfixture))&&(yyGetBool(yyfnotequal(ds_map_find_value(gmlfixture,"human_win"),"unplayed")))&&(yyGetBool(ds_map_exists(gmlfixture,"difficulty")))){{draw_set_alpha(0.75);gml_Script_draw_hd_text_transformed(_inst,
 _other,gmlsx,yyfplus(__yy_gml_errCheck(gmlsy),25),ds_map_find_value(gmlfixture,"difficulty"),0.5,0.5,0);draw_set_alpha(1);};};};};gmlsx=yyfplus(gmlsx,_inst.gmlgap);}};}function gml_Object_obj_matchline_Gesture_69(_inst,_other){if((yyGetBool(gml_Script_s_is_touch_allowed(_inst,_other)))&&(yyGetBool((yyGetBool(yyfgreater(g_pBuiltIn.get_mouse_y(),yyfminus(__yy_gml_errCheck(_inst.y),32))))&&(yyGetBool(yyfless(g_pBuiltIn.get_mouse_y(),yyfplus(__yy_gml_errCheck(_inst.y),32))))))){_inst.gmlflick_lineX=ds_map_find_value(g_pBuiltIn.get_event_data(),
@@ -7505,7 +7598,7 @@ __yy_gml_errCheck(gml_Script_s_get_string_position(__yy__v2202,_inst,ds_map_find
 }else if(yyCompareVal(___sw1978___,2,g_GMLMathEpsilon,false)==0){___swc1979___=1;}switch(___swc1979___){case 0:{yyInst(_inst,_other,100390).gmltitle="BENCHED!";yyInst(_inst,_other,100391).gmltext=string_replace(gml_Script_s_str(_inst,_other,"msg_benched_relationship"),"$num",string(yyInst(_inst,_other,97).gmlrelationship_boss));yyInst(_inst,_other,100391).gmltcolour=255;return;break;}case 1:{yyInst(_inst,_other,100390).gmlcolour=255;yyInst(_inst,_other,100390).gmlflash=true;yyInst(_inst,_other,100390).gmltitle="BENCHED!";
 yyInst(_inst,_other,100391).gmltext=string_replace(gml_Script_s_str(_inst,_other,"msg_benched_energy"),"$num",string(gml_Script_s_get_qb_energy(_inst,_other)));return;break;}};};};if(yyfequal(gmlrest_text_long,"")){{yyInst(_inst,_other,100390).visible=false;yyInst(_inst,_other,100391).visible=false;if(yyGetBool(global.gmlbrowser)){{instance_create_layer(56,232,"Instances",42);var gmlb2=instance_create_layer(184,232,"Instances",42);yyInst(_inst,_other,gmlb2).sprite_index=216;yyInst(_inst,_other,gmlb2).gmlgoogle=true;
 };};};};}function gml_Object_obj_prematch_Draw_64(_inst,_other){draw_sprite(_inst,184,yyInst(_inst,_other,97).gmlforce_uniform_sel1,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100398).x),21),yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100398).y),40));draw_sprite(_inst,184,yyInst(_inst,_other,97).gmlforce_uniform_sel2,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100399).x),21),yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100399).y),38));draw_set_font(global.gmlfnt_flex);draw_set_halign(1);draw_set_valign(1);
-var gmltx=yyftime(__yy_gml_errCheck(display_get_gui_width()),0.24);var gmlty=yyftime(__yy_gml_errCheck(display_get_gui_height()),0.65);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_upper(ds_map_find_value(_inst.gmlteam0,"name")));draw_set_font(global.gmlfnt_small_flex);gmlty=yyfplus(gmlty,16);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,_inst.gmlrecord[__yy_gml_array_check_index(0,_inst.gmlrecord)]);draw_set_halign(2);gmlty=yyfplus(gmlty,14);gml_Script_draw_hd_text(_inst,_other,gmltx,
+draw_set_font(global.gmlfnt_small_flex);draw_set_halign(1);draw_set_valign(1);gml_Script_draw_hd_text(_inst,_other,yyftime(display_get_gui_width(),0.5),yyftime(display_get_gui_height(),0.64),rbSlot(yyInst(_inst,_other,97).gmlweek,yyInst(_inst,_other,97).gmlmyteam_id));draw_set_font(global.gmlfnt_flex);draw_set_halign(1);draw_set_valign(1);var gmltx=yyftime(__yy_gml_errCheck(display_get_gui_width()),0.24);var gmlty=yyftime(__yy_gml_errCheck(display_get_gui_height()),0.65);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_upper(ds_map_find_value(_inst.gmlteam0,"name")));draw_set_font(global.gmlfnt_small_flex);gmlty=yyfplus(gmlty,16);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,_inst.gmlrecord[__yy_gml_array_check_index(0,_inst.gmlrecord)]);draw_set_halign(2);gmlty=yyfplus(gmlty,14);gml_Script_draw_hd_text(_inst,_other,gmltx,
 gmlty,string_upper(gml_Script_s_str(_inst,_other,"ui_Defense")));var gmlsx=gmltx;draw_sprite_ext(_inst,115,_inst.gmldefense[__yy_gml_array_check_index(0,_inst.gmldefense)],yyfplus(__yy_gml_errCheck(gmlsx),5),gmlty,1,1,0,global.gmlc_defense,1);gmlty=yyfplus(gmlty,14);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_upper(gml_Script_s_str(_inst,_other,"ui_Offense")));draw_sprite_ext(_inst,115,_inst.gmloffense[__yy_gml_array_check_index(0,_inst.gmloffense)],yyfplus(__yy_gml_errCheck(gmlsx),5),
 gmlty,1,1,0,global.gmlc_offense,1);draw_set_font(global.gmlfnt_flex);draw_set_halign(1);draw_set_valign(1);var gmltx=yyftime(__yy_gml_errCheck(display_get_gui_width()),0.76);var gmlty=yyftime(__yy_gml_errCheck(display_get_gui_height()),0.65);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_upper(ds_map_find_value(_inst.gmlteam1,"name")));draw_set_font(global.gmlfnt_small_flex);gmlty=yyfplus(gmlty,16);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,_inst.gmlrecord[__yy_gml_array_check_index(1,
 _inst.gmlrecord)]);draw_set_halign(0);gmlty=yyfplus(gmlty,14);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_upper(gml_Script_s_str(_inst,_other,"ui_Offense")));var gmlsx=gmltx;draw_sprite_ext(_inst,115,_inst.gmloffense[__yy_gml_array_check_index(1,_inst.gmloffense)],yyfminus(__yy_gml_errCheck(gmlsx),5),gmlty,(-1),1,0,global.gmlc_offense,1);gmlty=yyfplus(gmlty,14);gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_upper(gml_Script_s_str(_inst,_other,"ui_Defense")));draw_sprite_ext(_inst,
