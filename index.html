@@ -12,7 +12,7 @@
     <style>
         /* General body styling */
         body {
-            background: #0;
+            background: #000;
             color: #cccccc;
             margin: 0;
             padding: 0;
@@ -84,11 +84,35 @@
         }
 
         /* Game canvas styling */
+        /* Wrapper centers the game and fills the screen with black bars */
+        #gm4html5_div_id {
+            flex: 1 1 auto;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        /* Canvas always keeps a 16:9 ratio (640x360) and is as large as fits */
         canvas {
-            width: 100%;
-            height: 100%; /* Take up the full height of the screen */
-            margin-top: 0; /* Remove any space above the canvas */
-            display: block; /* Ensure canvas is displayed as block level element */
+            --game-w: 16;
+            --game-h: 9;
+            width: min(100vw, calc(100vh * var(--game-w) / var(--game-h))) !important;
+            height: min(100vh, calc(100vw * var(--game-h) / var(--game-w))) !important;
+            aspect-ratio: 16 / 9;
+            margin: 0 !important;
+            display: block;
+            flex: none;
+            image-rendering: auto;
+        }
+        @supports (height: 100dvh) {
+            canvas {
+                width: min(100vw, calc(100dvh * var(--game-w) / var(--game-h))) !important;
+                height: min(100dvh, calc(100vw * var(--game-h) / var(--game-w))) !important;
+            }
         }
 
         /* Ensure responsive design */
@@ -145,8 +169,6 @@
         /* Fullscreen: fill the whole screen with the game */
         #gm4html5_div_id:fullscreen { width: 100vw; height: 100vh; background: #000; }
         #gm4html5_div_id:-webkit-full-screen { width: 100vw; height: 100vh; background: #000; }
-        #gm4html5_div_id:fullscreen canvas { width: 100% !important; height: 100% !important; }
-        #gm4html5_div_id:-webkit-full-screen canvas { width: 100% !important; height: 100% !important; }
 
         /* Fallback for browsers with no Fullscreen API (iPhone Safari) */
         #gm4html5_div_id.pseudo-fs {
@@ -159,7 +181,6 @@
             z-index: 9999;
             background: #000;
         }
-        #gm4html5_div_id.pseudo-fs canvas { width: 100% !important; height: 100% !important; }
         html.rb-pseudo-fs, html.rb-pseudo-fs body { overflow: hidden; }
     </style>
 
