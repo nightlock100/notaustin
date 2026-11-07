@@ -15,18 +15,18 @@ workflows:
       - name: Sync Capacitor iOS project
         script: npx cap sync ios
 
-      - name: Build iOS simulator app
+      - name: Build iPhone app
         script: |
           cd ios/App
           xcodebuild \
             -project App.xcodeproj \
             -scheme App \
-            -sdk iphonesimulator \
+            -sdk iphoneos \
             -configuration Debug \
             -derivedDataPath "$CM_BUILD_DIR/build" \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             build
 
     artifacts:
-      - build/Build/Products/Debug-iphonesimulator/*.app
+      - build/Build/Products/Debug-iphoneos/*.app
