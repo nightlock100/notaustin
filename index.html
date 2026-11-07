@@ -170,8 +170,7 @@
         #gm4html5_div_id:fullscreen { width: 100vw; height: 100vh; background: #000; }
         #gm4html5_div_id:-webkit-full-screen { width: 100vw; height: 100vh; background: #000; }
 
-        /* Fallback for browsers with no Fullscreen API (iPho
-        ne Safari) */
+        /* Fallback for browsers with no Fullscreen API (iPhone Safari) */
         #gm4html5_div_id.pseudo-fs {
             position: fixed;
             top: 0;
@@ -183,6 +182,19 @@
             background: #000;
         }
         html.rb-pseudo-fs, html.rb-pseudo-fs body { overflow: hidden; }
+
+        /* Navbar is completely hidden in fullscreen (real or fallback) */
+        #gm4html5_div_id:fullscreen header,
+        #gm4html5_div_id:-webkit-full-screen header,
+        #gm4html5_div_id.pseudo-fs header {
+            display: none !important;
+        }
+        /* Keep the fullscreen button in its normal spot too */
+        #gm4html5_div_id:fullscreen #rb-fs-btn.navbar-open,
+        #gm4html5_div_id:-webkit-full-screen #rb-fs-btn.navbar-open,
+        #gm4html5_div_id.pseudo-fs #rb-fs-btn.navbar-open {
+            top: 8px;
+        }
     </style>
 
     <title>Home | Schoology</title>
@@ -193,7 +205,15 @@
     <div class="gm4html5_div_class" id="gm4html5_div_id">
         <!-- Header with navigation -->
         <header>
-      
+            <nav class="navbar" id="navbar">
+                <h1 class="main-heading">Retro Bowl</h1>
+                <ul class="nav-links">
+                    <li><a href="https://nightlock100.github.io/nightlock101">Main RB</a></li>
+                    <li><a href="https://nightlock102.github.io/nightlock101">College Mod</a></li>
+                    <li><a href="readme.html">Read Me!</a></li>
+                    <li><a href="console.html">Console</a></li>
+                </ul>
+            </nav>
         </header>
 
         <!-- Game Loading Screen (hidden initially) -->
@@ -240,6 +260,10 @@
         // Handle Enter key press to toggle navbar visibility
         document.addEventListener('keydown', function(event) {
             if (event.key === "Enter") {
+                // Don't toggle the navbar while in fullscreen
+                const inFs = document.fullscreenElement || document.webkitFullscreenElement ||
+                    document.getElementById('gm4html5_div_id').classList.contains('pseudo-fs');
+                if (inFs) return;
                 // Toggle the navbar sliding in and out by changing its transform property
                 const header = document.querySelector('header');
                 if (header.style.transform === 'translateY(0px)') {
