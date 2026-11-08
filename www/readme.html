@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script src="/js/all.js"></script>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta charset="utf-8" />
+    <link rel="icon" href="download__12_-removebg-preview.png" type="image/x-icon" />
+    <style>
+        body {
+            background-color: #007aff; /* Retro Bowl's blue color */
+            border-style: solid;
+            border-width: 5px;
+            border-radius: 15px;
+            border-color: #ffffff;
+            font-family: 'Press Start 2P', cursive; /* Retro pixelated font */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            color: #ffffff;
+        }
+
+        /* Retro-style Title */
+        h1 {
+            font-size: 48px;
+            text-transform: uppercase;
+            text-align: center;
+            letter-spacing: 5px;
+            color: #ffffff;
+            margin-bottom: 40px; /* Increased margin for spacing */
+        }
+
+        .button-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 30px; /* Increased spacing between buttons */
+            width: 100%;
+            max-width: 600px;
+            margin-top: 20px;
+        }
+
+    
+        @font-face {
+    font-family: 'Press Start 2P';
+    src: url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+}
+
+button {
+    background-color: #2378ff; /* Blue background */
+    color: #ffffff; /* White text */
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    padding: 12px 20px;
+    text-transform: uppercase;
+    border: 4px solid #ffffff; /* White border */
+    border-radius: 0px; /* No rounded edges */
+    position: relative;
+    cursor: pointer;
+    box-shadow: -4px 4px 0px #4a4a4a; /* Pixel shadow effect */
+    text-align: center;
+    display: inline-block;
+}
+
+p {
+    background-color: #2378ff; /* Blue background */
+    color: #ffffff; /* White text */
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    padding: 12px 20px;
+    text-transform: uppercase;
+    border: 4px solid #ffffff; /* White border */
+    border-radius: 0px; /* No rounded edges */
+    position: relative;
+    cursor:auto;
+    box-shadow: -4px 4px 0px #4a4a4a; /* Pixel shadow effect */
+    text-align: center;
+    display: inline-block;
+    width: 800px;
+    line-height: 30px;
+}
+
+.read h2 {
+    font-size: 25px;
+    line-height: 50px;
+    text-align: center;
+}
+        .gold {
+    background-color: #cfa527;
+    color: white;
+    border-color: white;
+    padding: 20px 20px; /* Increased padding for larger buttons */
+    font-size: 22px; /* Increased font size for better readability */
+}
+        .gold:hover {
+            background-color: #9c7c1c;
+        }
+        .gold:active {
+            background-color:#755d13;
+        }
+
+        .lb {
+            background-color: #71a9bf;
+            
+        }
+
+        .lb:hover {
+            background-color: #4f7d9e;
+        }
+        .lb:active {
+            background-color: #3a5f7c;
+        } 
+
+        button:hover {
+            background-color: #005cbf; /* Darker blue on hover */
+            transform: scale(1.05);
+        }
+
+        button:active {
+    background-color: #003d7a;
+    box-shadow: none; /* Remove shadow when pressed */
+    transform: translate(4px, 4px); /* Create an instant offset effect */
+}
+
+        /* Style for custom "Choose File" button */
+        #customFileInput {
+            background-color: #2378ff; /* Blue background */
+    color: #ffffff; /* White text */
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    padding: 12px 20px;
+    text-transform: uppercase;
+    border: 4px solid #ffffff; /* White border */
+    border-radius: 0px; /* No rounded edges */
+    position: relative;
+    cursor: pointer;
+    box-shadow: 4px 4px 0px #4a4a4a; /* Pixel shadow effect */
+    text-align: center;
+    display: inline-block;
+        }
+
+        #customFileInput:hover {
+            background-color: #005cbf; /* Darker blue on hover */
+            transform: scale(1.05);
+        }
+
+        #customFileInput:active {
+            background-color: #003d7a; /* Even darker blue on click */
+            transform: scale(0.95); /* Press-down effect */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); /* Drop shadow for press effect */
+        }
+
+        /* Hide the actual file input button */
+        input[type="file"] {
+            display: none;
+        }
+
+        .center {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px; /* Space between the file input and import button */
+            margin-bottom: 40px; /* More space between the file input section and the next content */
+            width: 100%;
+        }
+
+        label {
+            cursor: pointer;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px;
+            color: #ffffff;
+            line-height: 1.5; /* Increased line-height for label */
+            padding: 10px 0; /* Added padding for more spacing around label text */
+            margin-bottom: 10px; /* Space between label and input */
+            width: 100%; /* Ensure label spans the full width */
+            text-align: center; /* Center align label text */
+        }
+
+        input[type="text"] {
+            background-color: #222;
+            border: 4px solid #ffffff; /* Thicker and more pixelated white border */
+            color: #ffffff;
+            padding: 16px 30px; /* Added more padding for text input */
+            font-family: 'Press Start 2P', cursive;
+            font-size: 18px;
+            border-radius: 5px;
+            margin-bottom: 30px; /* Increased margin for spacing between input and button */
+            width: 100%; /* Full width for the text input */
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #00ff00; /* Retro green focus border */
+        }
+
+    </style>
+
+    <!-- Importing a retro pixelated font -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <title>Grades | Schoology</title>
+    <link rel="icon" href="schoology.png" type="image/x-icon" />
+</head>
+<body>
+<h1>Instructions</h1>
+
+<div class="read">
+<p>
+Welcome to the Retro Bowl X Client. This client is designed to enhance your Retro Bowl experience by providing a more user-friendly interface and additional features. Below are the instructions to get started:  
+</p>
+<h2>
+Buttons
+</h2>
+<p>
+The CC buttons are used to add or subtract your Coach Credits. They do what you tell them to. <br><br>
+Get your double credits adds 3 to your CC to act as the bonus you usually get for watching the ad. <br><br>
+The export button puts all your save data into a .txt file to import into the game. <br><br>
+Stadium, Training, and Rehab max out your respective facilities to the max level. <br><br>
+QB Mode sets your game to QB mode, and FR Mode sets it to franchise mode. <br><br>
+The Choose File and Import buttons are used to import your save data from a .txt file. You click on Choose File and choose, and click import to import it.
+</p>
+<h2>Player Loader</h2>
+<p>This is where it gets complicated. Your players are numbered in order 0-11, 0 being the QB. In the first part, you can take that player data.<br><br>
+Then, you can replace players in the second part by selecting the number you want to replace, and insert the new player data.
+</p>
+<br>
+<br>
+<h2>Blackjack</h2>
+<p>just play black bro
+</p>
+<br>
+<br>
+
+</div>
+<br>
+<button onclick="navigateToPage()">BACK TO GAME</button> <br>
+<button onclick="navigateToConsole()">BACK TO CONSOLE</button>
+<br>
+<br>
+<br>
+<script>
+    function navigateToPage() {
+        window.location.href = "index.html";
+    }
+
+    function navigateToConsole() {
+        window.location.href = "console.html";
+    }
+</script>
+</body>
+
+
+</html>
