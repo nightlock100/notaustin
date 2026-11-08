@@ -114,6 +114,67 @@ function rbMatchFit(_inst){
         }
     }catch(e){}
 }
+
+// ===== TRUCK METER: hold the screen while carrying the ball to charge it =====
+var rbTruck = { held:false, sup:false, x0:0, y0:0, charge:0, t:0, el:null, wired:false };
+function rbTruckSuppress(){ return !!rbTruck.sup; }   // true after a truck hold: the release must not become a dive/stutter
+function rbTruckWire(){
+    if (rbTruck.wired) return;
+    var c = document.getElementById("canvas");
+    if (!c || !c.parentNode) return;
+    rbTruck.wired = true;
+    var pre = new Image(); pre.src = "html5game/trucking.png";
+    var el = document.createElement("div");
+    el.id = "rb-truck";
+    el.style.cssText = "position:fixed;display:none;z-index:15;pointer-events:none;background:url(html5game/trucking.png) 0 0/400% 400% no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;";
+    c.parentNode.appendChild(el);   // inside the game wrapper so it also shows in fullscreen
+    rbTruck.el = el;
+    window.addEventListener("pointerdown", function(e){
+        if (e.target && e.target.closest && e.target.closest("#rb-fs-btn")) return;
+        rbTruck.held = true; rbTruck.sup = false; rbTruck.x0 = e.clientX; rbTruck.y0 = e.clientY;
+    }, {capture:true, passive:true});
+    window.addEventListener("pointermove", function(e){
+        // holding means holding in ONE place: moving away (a swipe) cancels the charge
+        if (rbTruck.held && Math.hypot(e.clientX - rbTruck.x0, e.clientY - rbTruck.y0) > 30){ rbTruck.held = false; rbTruck.sup = false; }
+    }, {capture:true, passive:true});
+    var up = function(){ rbTruck.held = false; };
+    ["pointerup","pointercancel","touchend","touchcancel","mouseup"].forEach(function(t){ window.addEventListener(t, up, {capture:true, passive:true}); });
+    window.addEventListener("blur", up);
+}
+// True while one of your players is carrying the ball (after a catch or a handoff)
+function rbTruckCarrier(_inst,_other){
+    if (room_get_name(g_pBuiltIn.get_current_room()) !== "rm_match") return false;
+    var bid = global.gmlmaster_ball;
+    if (!(rbN(bid) >= 0)) return false;
+    var ball = yyInst(_inst,_other,bid);
+    if (!ball) return false;
+    var s = rbN(ball.gmlstate);
+    if (s !== 5 && s !== 19) return false;          // 5 = BALL_RECEIVED, 19 = BALL_HANDOFF
+    var hid = ball.gmlholder;
+    if (!(rbN(hid) >= 0)) return false;             // -4 means nobody has it
+    var p = yyInst(_inst,_other,hid);
+    if (!p || rbN(p.gmldead) > 0 || !(rbN(p.gmloffense) > 0)) return false;
+    return true;
+}
+function rbTruckTick(_inst,_other){
+    try{
+        rbTruckWire();
+        var el = rbTruck.el; if (!el) return;
+        var now = performance.now(), dt = Math.min(0.1, (now - rbTruck.t) / 1000); rbTruck.t = now;
+        if (!(rbTruck.held && rbTruckCarrier(_inst,_other))){ rbTruck.charge = 0; el.style.display = "none"; return; }
+        rbTruck.sup = true;
+        rbTruck.charge = Math.min(1, rbTruck.charge + dt / 0.5);          // full in half a second
+        var f = Math.min(15, Math.floor(rbTruck.charge * 16));            // frame 0..15
+        var r = document.getElementById("canvas").getBoundingClientRect();
+        var w = r.width * 0.27, h = w * 0.3;
+        el.style.width = w + "px"; el.style.height = h + "px";
+        el.style.left = r.left + "px"; el.style.top = (r.top + r.height * 0.04) + "px";   // top-left, like the real game
+        el.style.backgroundPosition = ((f % 4) * 100 / 3) + "% " + (Math.floor(f / 4) * 100 / 3) + "%";
+        el.style.display = "block";
+    }catch(e){}
+}
+
+// Render at the screen's real pixel density (capped at 2x for performance)
 // Render at the screen's real pixel density (capped at 2x for performance)
 function rbDpr(){
     // Render scale. Default: at least 2x (supersampled, so 1x screens look smoother), up to 3x on dense screens.
@@ -6695,7 +6756,7 @@ _other){(_inst.gmls_draw_scoreboard_qb_training=__yy_method(_inst,gml_Script_s_d
 _other,_inst.gmlminutes,_inst.gmlseconds)));if(yyfequal(_inst.gmlminutes,0)){{draw_set_color(65535);if(yyfless(_inst.gmlseconds,6)){draw_set_color(255);};};};gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty1,gmltime);draw_set_color(16777215);}}function gml_GlobalScript_s_update_manual_gestures(_inst,_other){(_inst.gmls_update_manual_gestures=__yy_method(_inst,gml_Script_s_update_manual_gestures));}function gml_Script_s_update_manual_gestures(_inst,_other){{global.gmlflickVelX=0;global.gmlflickVelY=0;
 {var __yy__v1863=GetWithArray(global.gmlmaster_ball);for(var __yy__v1864 in __yy__v1863){if(!__yy__v1863.hasOwnProperty(__yy__v1864))continue;var __yy__v1865=__yy__v1863[__yy__v1864];if(yyfequal(__yy__v1865.gmlstate,2)){{yyInst(_inst,_other,104).gmlmobbrow_start_time=0;return;};};}};if(yyGetBool(gml_Script_s_is_touch_allowed(_inst,_other))){var ___sw1542___=_inst.gmlmobbrow_start_time;var ___swc1543___=-1;if(yyCompareVal(___sw1542___,0,g_GMLMathEpsilon,false)==0){___swc1543___=0;}switch(___swc1543___){
 case 0:{if(yyGetBool(mouse_check_button(1))){{_inst.gmlmobbrow_start_time=g_pBuiltIn.get_current_time();_inst.gmlmobbrow_start_x=g_pBuiltIn.get_mouse_x();_inst.gmlmobbrow_start_y=g_pBuiltIn.get_mouse_y();};};break;}default :{if(!yyGetBool(mouse_check_button(1))){{_inst.gmlmobbrow_start_time=0;if(yyfgreater(point_distance(_inst.gmlmobbrow_start_x,_inst.gmlmobbrow_start_y,g_pBuiltIn.get_mouse_x(),g_pBuiltIn.get_mouse_y()),20)){{var gmldir=point_direction(_inst.gmlmobbrow_start_x,_inst.gmlmobbrow_start_y,
-g_pBuiltIn.get_mouse_x(),g_pBuiltIn.get_mouse_y());global.gmlflickVelX=yyftime(__yy_gml_errCheck(dcos(gmldir)),2);global.gmlflickVelY=yyftime(__yy_gml_errCheck(dsin(gmldir)),(-2));};};};};break;}};};}}function gml_GlobalScript_s_obj_controller_draw_begin(_inst,_other){(_inst.gmls_obj_controller_draw_begin=__yy_method(_inst,gml_Script_s_obj_controller_draw_begin));}function gml_Script_s_obj_controller_draw_begin(_inst,_other){{var gmlfieldfans=(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))?310:2);
+g_pBuiltIn.get_mouse_x(),g_pBuiltIn.get_mouse_y());if(!rbTruckSuppress()){global.gmlflickVelX=yyftime(__yy_gml_errCheck(dcos(gmldir)),2);global.gmlflickVelY=yyftime(__yy_gml_errCheck(dsin(gmldir)),(-2));}};};};};break;}};};}}function gml_GlobalScript_s_obj_controller_draw_begin(_inst,_other){(_inst.gmls_obj_controller_draw_begin=__yy_method(_inst,gml_Script_s_obj_controller_draw_begin));}function gml_Script_s_obj_controller_draw_begin(_inst,_other){{var gmlfieldfans=(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))?310:2);
 var gmlfield=(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))?325:1);var gmlsideline_crew=(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))?280:34);var gmlshow_band=gml_Script_s_is_co_mode(_inst,_other);var gmlshow_field_text=gml_Script_s_is_co_mode(_inst,_other);if(!yyGetBool(yyInst(_inst,_other,97).gmlgamepractice)){{draw_sprite_ext(_inst,gmlfield,_inst.gmlfield_type,0,66,2,2,0,16777215,1);shader_set(0);{shader_set_uniform_f(global.gmlcolorHelmet,1,0,0);shader_set_uniform_f(global.gmlcolorShirt,0,
 1,0);shader_set_uniform_f(global.gmlcolorPants,1,0,1);shader_set_uniform_f(global.gmlcolorPants_b,0,1,1);shader_set_uniform_f(global.gmlcolorCleats,1,1,0);};shader_set_uniform_f(global.gmlreplaceHelmet,_inst.gmlshd_helmet[__yy_gml_array_check_index(2,_inst.gmlshd_helmet)],_inst.gmlshd_helmet[__yy_gml_array_check_index(1,_inst.gmlshd_helmet)],_inst.gmlshd_helmet[__yy_gml_array_check_index(0,_inst.gmlshd_helmet)]);shader_set_uniform_f(global.gmlreplaceShirt,_inst.gmlshd_shirt[__yy_gml_array_check_index(2,
 _inst.gmlshd_shirt)],_inst.gmlshd_shirt[__yy_gml_array_check_index(1,_inst.gmlshd_shirt)],_inst.gmlshd_shirt[__yy_gml_array_check_index(0,_inst.gmlshd_shirt)]);shader_set_uniform_f(global.gmlreplacePants,_inst.gmlshd_pants[__yy_gml_array_check_index(2,_inst.gmlshd_pants)],_inst.gmlshd_pants[__yy_gml_array_check_index(1,_inst.gmlshd_pants)],_inst.gmlshd_pants[__yy_gml_array_check_index(0,_inst.gmlshd_pants)]);shader_set_uniform_f(global.gmlreplacePants_b,0.9,0.9,0.9);shader_set_uniform_f(global.gmlreplaceCleats,
@@ -7338,7 +7399,7 @@ _inst.gmldraft_info_done=0;_inst.gmlexpiredcontract_msg_done=false;_inst.gmloffe
 _other);};};};}else {{gml_Script_s_create_new_save(_inst,_other);};};gml_Script_slog(_inst,_other,yyfplus("myteam_id=",__yy_gml_errCheck(string(_inst.gmlmyteam_id))));if(!yyGetBool(ds_exists(_inst.gmlteamlist,2))){{gml_Script_slog(_inst,_other,"no teamlist!!!");gml_Script_s_create_new_save(_inst,_other);};}else {if(yyfless(ds_list_size(_inst.gmlteamlist),32)){{gml_Script_slog(_inst,_other,"teamlist less than 32!!!");gml_Script_s_create_new_save(_inst,_other);};};};gml_Script_s_set_up_temp_variables(_inst,
 _other);gml_Script_slog(_inst,_other,yyfplus("myteam_id = ",__yy_gml_errCheck(string(_inst.gmlmyteam_id))));gml_Script_slog(_inst,_other,yyfplus("myteam.uid = ",__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlmyteam,"uid")))));{gml_Script_s_update_music(_inst,_other);};gml_Script_s_fonts_init(_inst,_other);if(yyGetBool(global.gmlbrowser)){{gml_Script_slog(_inst,_other,">>>>");gml_Script_slog(_inst,_other,yyfplus("This is a browser:",__yy_gml_errCheck(url_get_domain())));gml_Script_slog(_inst,
 _other,">>>>");var gmluniform=instance_create_layer(0,0,"Instances",132);yyInst(_inst,_other,gmluniform).visible=false;gml_Script_s_load_uniform_file2(_inst,_other,_inst.gmlmyteam_id,gmluniform,0,"");if(yyGetBool(_inst.gmldo_welcome_msg)){room_goto(2);}else {room_goto(14);};return;};};global.gmllsh=ds_list_create();gml_Script_s_keyboard_custom_init(_inst,_other);gml_Script_s_multiplayer_init(_inst,_other);gml_Script_slog(_inst,_other,yyfplus(yyfplus("INC_CO_MODE:[",__yy_gml_errCheck(string(0))),"]"));
-{};gml_Script_s_title_goto(_inst,_other);}function gml_Object_obj_master_Alarm_0(_inst,_other){gml_Script_s_iap_init(_inst,_other);}function gml_Object_obj_master_Alarm_1(_inst,_other){}function gml_Object_obj_master_Step_0(_inst,_other){rbMenuBg();rbMatchFit(_inst);rbBjTick(_inst,_other);if((yyGetBool(global.gmlbrowser))&&(room_get_name(g_pBuiltIn.get_current_room())!=="rm_match")&&(yyGetBool(!yyGetBool(instance_exists(104))))){gml_Script_s_update_poki_scaling(_inst,_other);};gml_Script_s_update_gamepad(_inst,_other);if(yyGetBool(global.gmldebug)){gml_Script_s_debug_window_size(_inst,_other);};}function gml_Object_obj_master_Other_75(_inst,
+{};gml_Script_s_title_goto(_inst,_other);}function gml_Object_obj_master_Alarm_0(_inst,_other){gml_Script_s_iap_init(_inst,_other);}function gml_Object_obj_master_Alarm_1(_inst,_other){}function gml_Object_obj_master_Step_0(_inst,_other){rbMenuBg();rbMatchFit(_inst);rbTruckTick(_inst,_other);rbBjTick(_inst,_other);if((yyGetBool(global.gmlbrowser))&&(room_get_name(g_pBuiltIn.get_current_room())!=="rm_match")&&(yyGetBool(!yyGetBool(instance_exists(104))))){gml_Script_s_update_poki_scaling(_inst,_other);};gml_Script_s_update_gamepad(_inst,_other);if(yyGetBool(global.gmldebug)){gml_Script_s_debug_window_size(_inst,_other);};}function gml_Object_obj_master_Other_75(_inst,
 _other){gml_Script_slog(_inst,_other,yyfplus("Async_System: ",__yy_gml_errCheck(string(ds_map_find_value(g_pBuiltIn.get_async_load(),"event_type")))));var ___sw1718___=ds_map_find_value(g_pBuiltIn.get_async_load(),"event_type");var ___swc1719___=-1;if(yyCompareVal(___sw1718___,"audio_system_status",g_GMLMathEpsilon,false)==0){___swc1719___=0;}switch(___swc1719___){case 0:{if(!yyGetBool(global.gmlbrowser)){return;};gml_Script_s_update_music(_inst,_other);break;}};gml_Script_s_gamepad_async(_inst,_other);
 }// /// @description Debug RoomName 
 function gml_Object_obj_master_Other_4(_inst,_other){gml_Script_slogf(_inst,_other,"\nROOM: %1",room_get_name(g_pBuiltIn.get_current_room()));gml_Script_slogf(_inst,_other,"gamepad: %1",global.gmlgamepad);}function gml_Object_obj_master_KeyPress_67(_inst,_other){if(!yyGetBool(global.gmldebug)){return;};{var __yy__v2042=GetWithArray(71);for(var __yy__v2043 in __yy__v2042){if(!__yy__v2042.hasOwnProperty(__yy__v2043))continue;var __yy__v2044=__yy__v2042[__yy__v2043];return;
