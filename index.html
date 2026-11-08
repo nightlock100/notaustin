@@ -115,6 +115,13 @@
             }
         }
 
+        /* Hide the entire top bar on phones / touch devices */
+        @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+            header {
+                display: none !important;
+            }
+        }
+
         /* Ensure responsive design */
         @media (max-width: 768px) {
             .navbar {
@@ -260,6 +267,8 @@
         // Handle Enter key press to toggle navbar visibility
         document.addEventListener('keydown', function(event) {
             if (event.key === "Enter") {
+                // Never show the navbar on phones / touch devices
+                if (window.matchMedia("(max-width: 768px), (hover: none) and (pointer: coarse)").matches) return;
                 // Don't toggle the navbar while in fullscreen
                 const inFs = document.fullscreenElement || document.webkitFullscreenElement ||
                     document.getElementById('gm4html5_div_id').classList.contains('pseudo-fs');
