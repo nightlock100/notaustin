@@ -301,7 +301,7 @@ function rbCpuSignWeek(_i,_o){
             if (src) { root.cutpool = root.cutpool.filter(function (x) { return x !== src; }); if (src.id !== undefined) { taken.push(src.id); } }
             root.sg.c[T] = (root.sg.c[T] || 0) + 1; root.sg.n += 1; sync[T] = true; done++;
             if (RB_CPU_SIGN_NEWS) {
-                try { gml_Script_s_add_news(_i, _o, "SIGNING: " + rbTmShort(T).toUpperCase() + " sign " + np.tag + " " + (np.fname || "?").charAt(0) + "." + np.lname + " (" + np.rating + " stars)"); } catch (_e) {}
+                try { gml_Script_s_add_news(_i, _o, "SIGNING: " + rbTmShort(T).toUpperCase() + " sign " + np.tag + " " + (np.fname || "?").charAt(0) + "." + np.lname + " (" + (Math.round(Number(np.rating)) / 2) + " stars)"); } catch (_e) {}
             }
         }
         if (done || dirty) {
@@ -1100,6 +1100,429 @@ function rbGLFit(_inst, _other, x, y, txt, maxW) {
     var sc = maxW / w, base = global.gmlhd_fonts ? 0.25 : 1;
     draw_text_transformed(x, y + (1 - sc) * 3, txt, base * sc, base * sc, 0);
 }
+// draws the real game button (obj_button_sqr sprite 129: frame 0/1 + tinted frame 2) with the back arrow (sprite 142), exactly like obj_button's Draw GUI
+function rbDrawBackBtn(_inst, _other, bx, by, sw, sh) {
+    var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+    var pr = mx >= bx && mx <= bx + sw && my >= by && my <= by + sh && mouse_check_button(1);
+    var M = yyInst(_inst, _other, 97);
+    var col = M.gmlqb_mode ? global.gmlc_buttons : global.gmlc_background;
+    var w = sprite_get_width(129), h = sprite_get_height(129);
+    var ox = pr ? -2 : 0, oy = pr ? 2 : 0;
+    draw_sprite(_inst, 129, pr ? 1 : 0, bx, by);
+    draw_sprite_ext(_inst, 129, 2, bx + ox, by + oy, 1, 1, 0, col, 1);
+    draw_set_colour(16777215);
+    draw_sprite(_inst, 142, 0, bx + w / 2 + 1 + ox, by + h / 2 - 1 + oy);
+    draw_set_colour(16777215);
+}
+// rounded box exactly like obj_vbox (9-slice sprite 156)
+function rbDrawBox(_inst, x, y, w, h, col) {
+    draw_set_colour(global.gmlc_background);
+    draw_rectangle(x + 2, y + 2, x + w - 2, y + h - 2, 0);
+    draw_sprite_ext(_inst, 156, 0, x, y, 1, 1, 0, col, 1);
+    draw_sprite_ext(_inst, 156, 2, x + 4, y, (w - 8) / 4, 1, 0, col, 1);
+    draw_sprite_ext(_inst, 156, 1, x + w - 4, y, 1, 1, 0, col, 1);
+    draw_sprite_ext(_inst, 156, 3, x + w - 2, y + 4, 1, (h - 8) / 4, 0, col, 1);
+    draw_sprite_ext(_inst, 156, 0, x + w - 4, y + h - 4, 1, 1, 0, col, 1);
+    draw_sprite_ext(_inst, 156, 2, x + 4, y + h - 2, (w - 8) / 4, 1, 0, col, 1);
+    draw_sprite_ext(_inst, 156, 1, x, y + h - 4, 1, 1, 0, col, 1);
+    draw_sprite_ext(_inst, 156, 3, x, y + 4, 1, (h - 8) / 4, 0, col, 1);
+    draw_set_colour(16777215);
+}
+// the game's button click sound (same check obj_button uses)
+function rbClickSnd(_inst, _other) {
+    try { if (ds_map_find_value(yyInst(_inst, _other, 97).gmlmap_options, "op_soundfx")) audio_play_sound(5, 1, false); } catch (e) {}
+}
+function rbBackClicked(_inst, _other, x, y, w, h) {
+    var c = rbGLClicked(x, y, w, h);
+    if (c) rbClickSnd(_inst, _other);
+    return c;
+}
+// small game-style button (sprite 129 scaled) with a text label; returns true when clicked. active=false greys it out like an inactive game button
+function rbSmallBtn(_inst, _other, x, y, w, h, label, active) {
+    var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+    var sx = w / sprite_get_width(129), sy = h / sprite_get_height(129);
+    draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1);
+    if (!active) {
+        draw_sprite_ext(_inst, 129, 1, x + 2, y - 2, sx, sy, 0, 4210752, 1);
+        draw_set_colour(4210752);
+        gml_Script_draw_hd_text(_inst, _other, x + w / 2 + 1, y + h / 2 - 1, label);
+        draw_set_colour(16777215);
+        if (rbHold[x + "," + y]) rbHold[x + "," + y].t0 = 0;
+        return false;
+    }
+    var pr = mx >= x && mx <= x + w && my >= y && my <= y + h && mouse_check_button(1);
+    var M = yyInst(_inst, _other, 97);
+    var col = M.gmlqb_mode ? global.gmlc_buttons : global.gmlc_background;
+    var ox = pr ? -1 : 0, oy = pr ? 1 : 0;
+    draw_sprite_ext(_inst, 129, pr ? 1 : 0, x, y, sx, sy, 0, 16777215, 1);
+    draw_sprite_ext(_inst, 129, 2, x + ox, y + oy, sx, sy, 0, col, 1);
+    draw_set_colour(16777215);
+    gml_Script_draw_hd_text(_inst, _other, x + w / 2 + ox, y + h / 2 - 1 + oy, label);
+    // tap = one step on release (with click sound); hold = after a short delay it repeats quickly
+    var key = x + "," + y, st = rbHold[key] || (rbHold[key] = { t0: 0, last: 0, rep: false });
+    var now = g_pBuiltIn.get_current_time(), fire = false;
+    if (pr) {
+        if (!st.t0) { st.t0 = now; st.last = now; st.rep = false; }
+        else if (now - st.t0 > 350 && now - st.last >= 60) { st.last = now; st.rep = true; fire = true; }
+    } else if (st.t0) {
+        if (!st.rep && rbGLClicked(x, y, w, h)) { fire = true; rbClickSnd(_inst, _other); }
+        st.t0 = 0; st.rep = false;
+    }
+    return fire;
+}
+// team salary-cap bar, drawn exactly like obj_salarycap (the one beside the back button on the free agents / roster screens)
+function rbDrawSalaryBar(_inst, _other, x, y) {
+    try {
+        var M = yyInst(_inst, _other, 97);
+        var cur = gml_Script_s_get_salary_total(_inst, _other), mx = M.gmlsalary_cap + M.gmlboost_salary_cap;
+        var pct = (cur / mx) * 100, colr = global.gmlc_primary;
+        if (pct > 100) { pct = 100; colr = 255; }
+        var ttl = string_upper(gml_Script_s_str(_inst, _other, "ui_SalaryCap") + " " + rbFmtM(cur) + "m / " + rbFmtM(mx) + "m");
+        var w = sprite_get_width(135);
+        draw_sprite(_inst, 135, 0, x, y);
+        draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1);
+        var tx = x + w / 2, sw2 = 2 + gml_Script_string_hd_width(_inst, _other, ttl) / 2, sh2 = 1 + gml_Script_string_hd_height(_inst, _other, ttl) / 2;
+        draw_rectangle_color(tx - sw2 - 2, y - sh2, tx + sw2, y + sh2, global.gmlc_background, global.gmlc_background, global.gmlc_background, global.gmlc_background, 0);
+        draw_set_colour(16777215);
+        gml_Script_draw_hd_text(_inst, _other, tx, y, ttl);
+        var bw = w - 16, prc = Math.min(bw, Math.max(1, ((bw - 4) / 100) * pct));
+        draw_rectangle_color(x + 8, y + 8, x + 8 + bw, y + 24, global.gmlc_backfill, global.gmlc_backfill, global.gmlc_backfill, global.gmlc_backfill, 0);
+        draw_rectangle_color(x + 10, y + 10, x + 10 + prc, y + 22, colr, colr, colr, colr, 0);
+        draw_set_halign(0);
+    } catch (e) {}
+}
+// salary text: 12.5 -> "12.5" (GameMaker's string() would give "12.50"), 12 -> "12"
+function rbFmtM(v) { var n = Number(v); return isFinite(n) ? String(Math.round(n * 100) / 100) : String(v); }
+// player interest (0-100) from the offer vs. what the player asks: matching the ask = 80%, nothing = 0%, overpaying climbs toward (never past) 100%
+function rbNegInterest(offer, ask) {
+    offer = Math.max(0, offer);
+    if (!(ask > 0)) return 80 + 20 * (1 - Math.exp(-offer));
+    var r = offer / ask;
+    if (r <= 1) return 80 * Math.pow(r, 1.5);          // low-balling drops off fast
+    return 80 + 20 * (1 - Math.exp(-(r - 1) * 5));     // +25% over the ask is ~ 94%, diminishing returns
+}
+// contract length the player asks for (1-15 yrs), from his age: young guys want 3-4 yrs, old guys want 1-2 yrs
+function rbNegAskLen(_inst, _other, pm) {
+    try {
+        var age = Number(ds_map_find_value(pm, "age"));
+        var rk = Number(gml_Script_s_rookie_age_internal(_inst, _other));
+        var mx = Number(gml_Script_s_get_max_age(_inst, _other, pm));
+        if (!(age > 0)) return 2;
+        if (age <= rk + 2) return 4;           // youngest: 4 yrs
+        if (age <= rk + 5) return 3;           // young: 3 yrs
+        if (age >= mx - 3) return 1;           // oldest: 1 yr
+        return 2;                              // veterans: 2 yrs
+    } catch (e) { return 2; }
+}
+// interest multiplier from how far the offered length is from the asked length: 1.0 when equal, x0.9 per year apart
+function rbNegLenFactor(offerLen, askLen) { return Math.pow(0.9, Math.abs(offerLen - askLen)); }
+// red (0%) -> yellow (50%) -> green (100%), as a GameMaker (BGR) colour
+function rbInterestCol(pct) {
+    var t = Math.min(1, Math.max(0, pct / 100));
+    var r = Math.round(235 * Math.min(1, 2 * (1 - t))), g = Math.round(205 * Math.min(1, 2 * t)), b = 40;
+    return r + g * 256 + b * 65536;
+}
+// the real text-button sprite (same object the profile's Negotiate/Sign button uses); read once from a throwaway instance
+function rbGetOfferSpr() {
+    if (rbOfferSpr >= 0) return rbOfferSpr;
+    try {
+        var t = instance_create_depth(0, -500, 0, 34);
+        var si = t.sprite_index;
+        instance_destroy(t);
+        if (si >= 0 && sprite_get_width(si) > 20) rbOfferSpr = si;
+    } catch (e) {}
+    if (rbOfferSpr < 0) {   // fallback: look the 104px game button sprite up by name
+        try { for (var i = 0; i < 600; i++) { if (sprite_get_name(i) === "spr_button_104") { rbOfferSpr = i; break; } } } catch (e2) {}
+    }
+    if (rbOfferSpr < 0) rbOfferSpr = 129;   // last resort: the square button sprite, so the button always shows
+    return rbOfferSpr;
+}
+// game-style text button using a given sprite at 1:1; returns true when clicked (plays the click sound)
+function rbSprBtn(_inst, _other, x, y, spr, label, active) {
+    var w = sprite_get_width(spr), h = sprite_get_height(spr);
+    if (active === false) {
+        draw_sprite_ext(_inst, spr, 1, x + 2, y - 2, 1, 1, 0, 4210752, 1);
+        draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(4210752);
+        gml_Script_draw_hd_text(_inst, _other, x + w / 2 + 1, y + h / 2 - 1, string_upper(label));
+        draw_set_colour(16777215); draw_set_halign(0);
+        return false;
+    }
+    var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+    var pr = mx >= x && mx <= x + w && my >= y && my <= y + h && mouse_check_button(1);
+    var M = yyInst(_inst, _other, 97);
+    var col = M.gmlqb_mode ? global.gmlc_buttons : global.gmlc_background;
+    var ox = pr ? -2 : 0, oy = pr ? 2 : 0;
+    draw_sprite(_inst, spr, pr ? 1 : 0, x, y);
+    draw_sprite_ext(_inst, spr, 2, x + ox, y + oy, 1, 1, 0, col, 1);
+    draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(16777215);
+    gml_Script_draw_hd_text(_inst, _other, x + w / 2 + 1 + ox, y + h / 2 - 1 + oy, string_upper(label));
+    draw_set_halign(0);
+    var c = rbGLClicked(x, y, w, h);
+    if (c) rbClickSnd(_inst, _other);
+    return c;
+}
+// chance the player accepts, from interest %: 20% interest or less never, 90%+ always, linear in between
+function rbNegAcceptChance(intr) { return Math.min(1, Math.max(0, (intr - 20) / 70)); }
+function rbNegAtt(pm) { var a = Number(ds_map_find_value(pm, "attitude")); return (a >= 0) ? Math.min(100, a) : 50; }
+// a player who was on YOUR team (contract expired -> back in the pool with your team id) is a re-signing
+function rbNegIsOwn(M, pm) {
+    try { return ds_list_find_index(M.gmlfreeagentlist, pm) >= 0 && Number(ds_map_find_value(pm, "teamid")) === Number(M.gmlmyteam_id); } catch (e) { return false; }
+}
+// last season's win % for your team (-1 when there is no record yet)
+function rbNegWinPct(M) {
+    try {
+        var hm = ds_list_find_value(M.gmlhistory, ds_list_size(M.gmlhistory) - 1);
+        if (hm && ds_exists(hm, 1) && ds_map_exists(hm, "wins")) {
+            var w = Number(ds_map_find_value(hm, "wins")), l = Number(ds_map_find_value(hm, "losses")), t = Number(ds_map_find_value(hm, "ties")) || 0;
+            if (w + l + t > 0) return (w + t * 0.5) / (w + l + t);
+        }
+    } catch (e) {}
+    return -1;
+}
+// would he start for you? Uses the game's own starter slots per position (QB 1, RB 1, TE 1, WR 3, OL 5, DL 4, LB 3, CB 2, S 2, K 1;
+// OT: only 2 tackles start, DT: only 2 interior DL start; DUAL HB / DUAL TE / DUAL QB formations change the slots). Returns { start: bool, depth: how far down the bench he sits (0 = starts) }
+function rbNegDepth(_inst, _other, M, pm) {
+    var res = { start: true, depth: 0 };
+    try {
+        var bpOf = function (c) { return (c === 15) ? 6 : ((c === 16) ? 5 : c); };
+        var code = Number(ds_map_find_value(pm, "position")), bp = bpOf(code);
+        var lim = { 1: 1, 2: 1, 3: 1, 4: 3, 5: 5, 6: 4, 7: 3, 8: 2, 9: 2, 10: 1 }, fm = rbGetForm();
+        if (fm === "DUAL HB") { lim[2] = 2; lim[3] = 0; } else if (fm === "DUAL TE") { lim[3] = 2; } else if (fm === "DUAL QB") { lim[1] = 2; }
+        var cands = [{ me: true, code: code, r: Number(gml_Script_s_get_player_rating(_inst, _other, pm)) }];
+        for (var i = 0; i < ds_list_size(M.gmlroster); i++) {
+            var q = ds_list_find_value(M.gmlroster, i);
+            if (!q || bpOf(Number(ds_map_find_value(q, "position"))) !== bp) continue;
+            if (Number(ds_map_find_value(q, "injury_week")) > 0) continue;   // a hurt player does not start
+            cands.push({ me: false, code: Number(ds_map_find_value(q, "position")), r: Number(gml_Script_s_get_player_rating(_inst, _other, q)) });
+        }
+        cands.sort(function (x, y) { return (y.r - x.r) || ((y.me ? 1 : 0) - (x.me ? 1 : 0)); });   // ties go to him
+        var startN = 0, otN = 0, dtN = 0, benched = 0, slots = (lim[bp] !== undefined) ? lim[bp] : 99;
+        for (var k = 0; k < cands.length; k++) {
+            var c = cands[k], isOT = (c.code === 16), isDT = (c.code === 6);
+            var gets = startN < slots && !(isOT && otN >= 2) && !(isDT && dtN >= 2);
+            if (gets) { startN++; if (isOT) otN++; if (isDT) dtN++; } else { benched++; }
+            if (c.me) { res.start = gets; res.depth = gets ? 0 : benched; break; }
+        }
+    } catch (e) {}
+    return res;
+}
+// everything that moves a player's interest besides the offer itself: attitude (all players) and, for a re-signing, team success + playing time
+function rbNegMood(_inst, _other, pm) {
+    var M = yyInst(_inst, _other, 97), att = rbNegAtt(pm), tags = [], mult = 0.85 + 0.3 * att / 100;   // attitude 0 = x0.85, 50 = x1.0, 100 = x1.15
+    var own = rbNegIsOwn(M, pm);
+    if (own) {
+        tags.push("RE-SIGNING");
+        var wp = rbNegWinPct(M);
+        if (wp >= 0) {
+            mult *= 1 + (wp - 0.5) * 0.3;   // a 100% season = x1.15, 0% = x0.85
+            if (wp >= 0.6) tags.push("WINNING TEAM"); else if (wp <= 0.4) tags.push("LOSING TEAM");
+        }
+        var dp = rbNegDepth(_inst, _other, M, pm);
+        if (dp.start) { mult *= 1.08; tags.push("WOULD START"); } else { mult *= Math.max(0.8, 1 - 0.06 * dp.depth); tags.push("WOULD BENCH"); }
+    }
+    tags.push("ATTITUDE: " + (att >= 70 ? "HAPPY" : (att >= 40 ? "OK" : (att >= 20 ? "UNHAPPY" : "FED UP"))));
+    return { mult: mult, text: tags.join(" - ") };
+}
+// player interest 0-100: salary offer x contract-length fit x mood
+function rbNegTotalInterest(_inst, _other, pm, offer, len) {
+    var ask = Number(ds_map_find_value(pm, "salary"));
+    var v = rbNegInterest(offer, ask) * rbNegLenFactor(len, rbNegAskLen(_inst, _other, pm)) * rbNegMood(_inst, _other, pm).mult;
+    return Math.min(100, Math.max(0, v));
+}
+function rbNegPatience(pm) { return (pm >= 0 && ds_map_exists(pm, "rb_patience")) ? Number(ds_map_find_value(pm, "rb_patience")) : 100; }
+function rbNegTryOffer(_inst, _other, pm) {
+    var M = yyInst(_inst, _other, 97);
+    var ask = Number(ds_map_find_value(pm, "salary"));
+    var intr = rbNegTotalInterest(_inst, _other, pm, rbNegOffer, rbNegLen);
+    var name = string(gml_Script_s_get_player_name(_inst, _other, pm, false));
+    // same roster / cap checks the Sign button makes
+    var maxR = 10; if (M.gmlsalary_cap > 150) maxR = 12; if (M.gmlsalary_cap > 200) maxR = 16; if (M.gmlsalary_cap > 275) maxR = 20; if (M.gmlsalary_cap > 350) maxR = 30;
+    if (ds_list_size(M.gmlroster) >= maxR) { rbNegMsg = "ROSTER FULL"; rbNegMsgT = g_pBuiltIn.get_current_time(); return; }
+    if (rbNegOffer + gml_Script_s_get_salary_total(_inst, _other) > M.gmlsalary_cap + M.gmlboost_salary_cap) { rbNegMsg = "OVER THE SALARY CAP"; rbNegMsgT = g_pBuiltIn.get_current_time(); return; }
+    if (Number(M.gmlcoach_credit) < Math.floor(0.5 * rbNegOffer) * rbNegLen) { rbNegMsg = "NOT ENOUGH CREDITS"; rbNegMsgT = g_pBuiltIn.get_current_time(); return; }
+    if (Math.random() < rbNegAcceptChance(intr)) {
+        // he accepts: show the "offer accepted" screen; the signing itself happens when you press Continue there
+        rbNegAcc = { off: rbNegOffer, len: rbNegLen, own: rbNegIsOwn(M, pm) };
+    } else {
+        // each decline costs patience: lowballing costs more (10 at 100% interest ... 30 at 0%)
+        var pat = Math.max(0, rbNegPatience(pm) - (10 + 20 * (1 - intr / 100)));
+        ds_map_set(pm, "rb_patience", pat);
+        if (pat <= 0.5) { ds_map_set(pm, "rb_patience", 0); ds_map_set(pm, "rb_walked", true); rbNegMsg = "PLAYER LOST PATIENCE"; rbNegExitAt = g_pBuiltIn.get_current_time() + 1800; }   // he walks away and goes back to the pool
+        else rbNegMsg = "OFFER DECLINED";
+        rbNegMsgT = g_pBuiltIn.get_current_time();
+    }
+}
+var rbHold = {};
+var rbNegLen = 1, rbNegAcc = null, rbNegExitAt = 0;
+var rbNegRoom = -1, rbNegBack = -1, rbNegOffer = 0, rbNegMsg = "", rbNegMsgT = 0, rbOfferSpr = -1;
+function rbNegMsgBox(_i, _o, msg) {
+    gml_Script_s_create_message(_i, _o, "", msg, gml_Script_s_str(_i, _o, "ui_Continue"), "", kgml_Script_s_msg_clear, "", global.gmlc_background, 1);
+}
+function rbNegOpen(_i, _o) {
+    try {
+        var M = yyInst(_i, _o, 97), pm = M.gmlplayer_profile;
+        var nm = string(gml_Script_s_get_player_name(_i, _o, pm, false));
+        // a player who lost patience went back to the pool but wants nothing to do with you
+        if (pm >= 0 && ds_map_exists(pm, "rb_walked") && ds_map_find_value(pm, "rb_walked")) { rbNegMsgBox(_i, _o, nm + " isn't interested in signing with you."); return; }
+        // same rule the game's own Sign button has: a re-signing player with rock-bottom morale refuses
+        if (rbNegIsOwn(M, pm) && rbNegAtt(pm) <= 15) { rbNegMsgBox(_i, _o, nm + " is too unhappy with the team to re-sign."); return; }
+        // patience starts from his attitude: happy players are patient, unhappy ones are not (attitude 100 = 100%, 50 = 70%, 0 = 40%)
+        if (!ds_map_exists(pm, "rb_patience")) ds_map_set(pm, "rb_patience", Math.min(100, 40 + 0.6 * rbNegAtt(pm)));
+        rbNegBack = g_pBuiltIn.get_current_room(); rbNegOffer = 0; rbNegLen = 1; rbNegMsg = ""; rbNegMsgT = 0; rbNegAcc = null; rbNegExitAt = 0;
+        if (!room_exists(rbNegRoom)) { rbNegRoom = room_add(); room_set_width(rbNegRoom, 480); room_set_height(rbNegRoom, 270); }
+        room_goto(rbNegRoom);
+    } catch (e) {}
+}
+function rbNegDraw(_inst, _other) {
+    try {
+        var M = yyInst(_inst, _other, 97), pm = M.gmlplayer_profile;
+        var fc = (global.gmlc_primary == 0) ? 16777215 : global.gmlc_primary, bg = global.gmlc_background;
+        var gw = display_get_gui_width(), gh = display_get_gui_height();
+        draw_rectangle_color(0, 0, gw, gh, bg, bg, bg, bg, false);
+        // standard room title (same as obj_roomtitle): white text with the star sprite on each side
+        draw_set_font(global.gmlfnt_flex); draw_set_valign(1); draw_set_halign(1);
+        draw_set_colour(16777215);
+        var ttxt = "NEGOTIATE", ttx = gw / 2, tty = 16;
+        var ttw = gml_Script_string_hd_width(_inst, _other, ttxt) * 0.5 + sprite_get_width(123) + 16;
+        gml_Script_draw_hd_text(_inst, _other, ttx, tty, ttxt);
+        draw_sprite_ext(_inst, 123, 0, ttx - ttw, tty, 2, 2, 0, 16777215, 1);
+        draw_sprite_ext(_inst, 123, 0, ttx + ttw - 2, tty, -2, 2, 0, 16777215, 1);
+        draw_set_font(global.gmlfnt_small_flex);
+        draw_set_colour(fc);
+        if (pm >= 0) {
+            // player name, slightly larger
+            var nsc = 1.3, nbase = global.gmlhd_fonts ? 0.25 : 1;
+            draw_text_transformed(gw / 2, 44, string(gml_Script_s_get_player_name(_inst, _other, pm, false)), nbase * nsc, nbase * nsc, 0);
+        }
+        if (pm >= 0 && !rbNegAcc) {
+            // mood line: re-signing / team success / playing time / attitude
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(fc);
+            rbGLFit(_inst, _other, gw / 2, 60, rbNegMood(_inst, _other, pm).text, gw - 24);
+            draw_set_halign(0);
+        }
+        if (pm >= 0 && !rbNegAcc) {
+            // asking salary box (left side)
+            var bxx = 12, byy = 72, bww = 150, bhh = 46;
+            rbDrawBox(_inst, bxx, byy, bww, bhh, 16777215);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(16777215);
+            gml_Script_draw_hd_text(_inst, _other, bxx + bww / 2, byy + 15, "ASKING SALARY:");
+            gml_Script_draw_hd_text(_inst, _other, bxx + bww / 2, byy + 31, "$" + rbFmtM(ds_map_find_value(pm, "salary")) + gml_Script_s_str(_inst, _other, "sla_Million"));
+            // player interest bar (right of the asking salary box): grows as the offer rises, red -> green
+            var ask = Number(ds_map_find_value(pm, "salary"));
+            var askLen = rbNegAskLen(_inst, _other, pm);
+            var intr = rbNegTotalInterest(_inst, _other, pm, rbNegOffer, rbNegLen), icol = rbInterestCol(intr);
+            var ix = 170, iy = 72, iw = 150, ih = 46;
+            rbDrawBox(_inst, ix, iy, iw, ih, 16777215);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(16777215);
+            gml_Script_draw_hd_text(_inst, _other, ix + iw / 2, iy + 15, "PLAYER INTEREST");
+            var ibw = iw - 24;
+            draw_rectangle_color(ix + 12, iy + 26, ix + 12 + ibw, iy + 38, global.gmlc_backfill, global.gmlc_backfill, global.gmlc_backfill, global.gmlc_backfill, 0);
+            var ifw = Math.max(1, (ibw - 4) * intr / 100);
+            draw_rectangle_color(ix + 14, iy + 28, ix + 14 + ifw, iy + 36, icol, icol, icol, icol, 0);
+            draw_set_halign(0);
+            // player patience box (under player interest): starts 100%, drops with each declined offer
+            var pat = rbNegPatience(pm), pcol = rbInterestCol(pat);
+            var px = 170, py = 126, pw = 150, ph = 58;
+            rbDrawBox(_inst, px, py, pw, ph, 16777215);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(16777215);
+            gml_Script_draw_hd_text(_inst, _other, px + pw / 2, py + 15, "PLAYER PATIENCE");
+            var pbw = pw - 24;
+            draw_rectangle_color(px + 12, py + 25, px + 12 + pbw, py + 35, global.gmlc_backfill, global.gmlc_backfill, global.gmlc_backfill, global.gmlc_backfill, 0);
+            if (pat > 0) { var pfw = Math.max(1, (pbw - 4) * pat / 100); draw_rectangle_color(px + 14, py + 27, px + 14 + pfw, py + 33, pcol, pcol, pcol, pcol, 0); }
+            gml_Script_draw_hd_text(_inst, _other, px + pw / 2, py + 46, string(Math.round(pat)) + "%");
+            draw_set_halign(0);
+            // salary offering box with - / + buttons (0.5m steps, never below 0)
+            var ox2 = 12, oy2 = 126, ow = 150, oh = 58;
+            rbDrawBox(_inst, ox2, oy2, ow, oh, 16777215);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(16777215);
+            gml_Script_draw_hd_text(_inst, _other, ox2 + ow / 2, oy2 + 15, "SALARY OFFERING");
+            gml_Script_draw_hd_text(_inst, _other, ox2 + ow / 2, oy2 + 39, "$" + rbFmtM(rbNegOffer) + gml_Script_s_str(_inst, _other, "sla_Million"));
+            if (rbSmallBtn(_inst, _other, ox2 + 7, oy2 + 28, 22, 22, "-", rbNegOffer > 0)) rbNegOffer = Math.max(0, Math.round((rbNegOffer - 0.5) * 2) / 2);
+            if (rbSmallBtn(_inst, _other, ox2 + ow - 29, oy2 + 28, 22, 22, "+", true)) rbNegOffer = Math.round((rbNegOffer + 0.5) * 2) / 2;
+            // asking length box (right column, above the length offering box)
+            var lx = 328, lw = 140;
+            rbDrawBox(_inst, lx, 72, lw, 46, 16777215);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(16777215);
+            gml_Script_draw_hd_text(_inst, _other, lx + lw / 2, 72 + 15, "ASKING LENGTH:");
+            gml_Script_draw_hd_text(_inst, _other, lx + lw / 2, 72 + 31, string(askLen) + (askLen == 1 ? " YEAR" : " YEARS"));
+            // length offering box with - / + buttons (1 to 15 years)
+            rbDrawBox(_inst, lx, 126, lw, 58, 16777215);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(16777215);
+            gml_Script_draw_hd_text(_inst, _other, lx + lw / 2, 126 + 15, "LENGTH OFFERING");
+            gml_Script_draw_hd_text(_inst, _other, lx + lw / 2, 126 + 39, string(rbNegLen) + (rbNegLen == 1 ? " YEAR" : " YEARS"));
+            if (rbSmallBtn(_inst, _other, lx + 7, 126 + 28, 22, 22, "-", rbNegLen > 1)) rbNegLen = Math.max(1, rbNegLen - 1);
+            if (rbSmallBtn(_inst, _other, lx + lw - 29, 126 + 28, 22, 22, "+", rbNegLen < 15)) rbNegLen = Math.min(15, rbNegLen + 1);
+            // CC cost counter under the boxes: floor(0.5 CC per $1m of yearly salary) x contract length
+            var ccTot = Math.floor(0.5 * rbNegOffer) * rbNegLen, ccTxt = string(ccTot);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(0); draw_set_colour(16777215);
+            var ccW = gml_Script_string_hd_width(_inst, _other, ccTxt) + 13, ccX = gw / 2 - ccW / 2;
+            draw_sprite(_inst, 105, 0, ccX + 4, 193);
+            gml_Script_draw_hd_text(_inst, _other, ccX + 11, 193, ccTxt);
+            draw_set_halign(0);
+        }
+        draw_set_halign(0);
+        // he accepted: full "offer accepted" screen; Continue completes the signing
+        if (rbNegAcc && pm >= 0) {
+            var aw = 300, ah = 118, ax = (gw - aw) / 2, ay = 68;
+            rbDrawBox(_inst, ax, ay, aw, ah, 16777215);
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1);
+            draw_set_colour(fc);
+            gml_Script_draw_hd_text(_inst, _other, gw / 2, ay + 18, "OFFER ACCEPTED!");
+            draw_set_colour(16777215);
+            gml_Script_draw_hd_text(_inst, _other, gw / 2, ay + 42, string(gml_Script_s_get_player_name(_inst, _other, pm, false)));
+            gml_Script_draw_hd_text(_inst, _other, gw / 2, ay + 64, (rbNegAcc.own ? "HAS RE-SIGNED WITH YOUR TEAM" : "HAS AGREED TO JOIN YOUR TEAM"));
+            gml_Script_draw_hd_text(_inst, _other, gw / 2, ay + 88, "$" + rbFmtM(rbNegAcc.off) + gml_Script_s_str(_inst, _other, "sla_Million") + " FOR " + rbNegAcc.len + (rbNegAcc.len == 1 ? " YEAR" : " YEARS"));
+            draw_set_halign(0);
+            var cspr = rbGetOfferSpr();
+            if (cspr >= 0 && rbSprBtn(_inst, _other, gw / 2 - sprite_get_width(cspr) / 2, 200, cspr, "Continue", true)) {
+                var acc = rbNegAcc; rbNegAcc = null;
+                ds_map_set(pm, "salary", acc.off);
+                var ccM = yyInst(_inst, _other, 97), ccCost = Math.floor(0.5 * acc.off) * acc.len;   // CC cost of the contract: store players are charged by the game's own routine from "creditcost", everyone else here
+                if (ds_list_find_index(ccM.gmlstorelist, pm) >= 0) { ds_map_set(pm, "creditcost", ccCost); } else {
+                    ccM.gmlcoach_credit = Math.max(0, Number(ccM.gmlcoach_credit) - ccCost);
+                    ds_map_set(ccM.gmlmap_options, "op_credits_purchased", Math.max(0, Number(ds_map_find_value(ccM.gmlmap_options, "op_credits_purchased")) - ccCost));
+                }
+                ds_map_set(pm, "contract", acc.len);
+                var signErr = null;
+                try { gml_Script_btn_response_pick_player_yes(_inst, _other); }   // the game's own signing routine (roster, news, achievements) -> roster screen
+                catch (e2) { signErr = e2; try { console.error("negotiate sign error", e2); } catch (_x) {} }
+                ds_map_set(pm, "contract", acc.len);
+                if (signErr) {
+                    // the game's routine threw part-way (e.g. in the re-sign news step) so it never left this screen: finish the signing here
+                    var Mx = yyInst(_inst, _other, 97);
+                    var fi = ds_list_find_index(Mx.gmlfreeagentlist, pm);
+                    if (fi > -1) ds_list_delete(Mx.gmlfreeagentlist, fi);
+                    var first = ds_list_find_index(Mx.gmlroster, pm);
+                    if (first < 0) {
+                        ds_map_set(pm, "signed_year", Mx.gmlyear); ds_map_set(pm, "teamid", Mx.gmlmyteam_id); ds_map_set(pm, "flash_time", g_pBuiltIn.get_current_time());
+                        ds_list_add(Mx.gmlroster, pm);
+                    } else {   // he must be on the roster exactly once
+                        for (var dd = ds_list_size(Mx.gmlroster) - 1; dd > first; dd--) { if (ds_list_find_value(Mx.gmlroster, dd) == pm) ds_list_delete(Mx.gmlroster, dd); }
+                    }
+                    global.rbRosterFrom = 14;
+                    room_goto(25);
+                }
+            }
+            return;
+        }
+        // he ran out of patience: after the message he goes back to the pool
+        if (rbNegExitAt > 0 && g_pBuiltIn.get_current_time() >= rbNegExitAt) { rbNegExitAt = 0; room_goto(rbNegBack >= 0 ? rbNegBack : 7); return; }
+        rbDrawSalaryBar(_inst, _other, 48, 232);
+        var ospr = rbGetOfferSpr();
+        if (ospr >= 0 && pm >= 0) {
+            var pat0 = rbNegPatience(pm), walked = (pat0 <= 0);
+            if (rbSprBtn(_inst, _other, 368, 232, ospr, "Offer", !walked)) rbNegTryOffer(_inst, _other, pm);
+        }
+        if (rbNegMsg !== "" && g_pBuiltIn.get_current_time() - rbNegMsgT < 2500) {
+            draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_colour(255);
+            gml_Script_draw_hd_text(_inst, _other, gw / 2, 205, rbNegMsg);
+            draw_set_halign(0); draw_set_colour(16777215);
+        }
+        var bx = 8, by = 232, sw = 33, sh = 32;
+        rbDrawBackBtn(_inst, _other, bx, by, sw, sh);
+        if (rbBackClicked(_inst, _other, bx, by, sw, sh) || keyboard_check_pressed(27)) room_goto(rbNegBack >= 0 ? rbNegBack : 7);
+    } catch (e) {}
+}
 function rbGameLogOpen() {
     try {
         if (!room_exists(rbGLRoom)) { rbGLRoom = room_add(); room_set_width(rbGLRoom, 480); room_set_height(rbGLRoom, 270); }
@@ -1113,6 +1536,204 @@ function rbGameLogMakeBtn(_inst, _other) {
     try {
         _inst.rbGLBtn = gml_Script_s_create_button(_inst, _other, RB_GL_X, RB_GL_Y, __yy_gml_object_create(_inst, (_inst.gml___struct___rbgl = __yy_method(_inst, gml_Script____struct___1_s_rm_league_co_init_gml_GlobalScript_s_college_league)), "L", rbGameLogOpen, RB_GL_SCALE), 36);
     } catch (e) {}
+}
+// profile: clicking the Attributes box flips it to a "Development Trait" box (empty for now); click again to flip back
+var RB_DEV_HIDE = [100438, 100439, 100440, 100444, 100450, 100452, 100453];
+function rbDevTraitSync(_inst, _other) {
+    try {
+        var box = yyInst(_inst, _other, 100432);
+        if (!box) return;
+        var vis = function(n) { var v = layer_get_visible(n); return v === true || v === 1; };
+        // leave the box alone on the XP-upgrade screens
+        var pm0 = _inst.gmlpmap, xg = 0;
+        try { xg = Number(ds_map_find_value(pm0, "xp_gain")) || 0; } catch (e2) {}
+        var xp = vis("Buttons_XP") || vis("Buttons_XP_Continue") || xg > 0;
+        if (xp) { if (_inst.rbDevView) rbDevTraitSet(_inst, _other, box, false); return; }
+        var pmx = _inst.gmlpmap;
+        if (yyGetBool(gml_Script_s_is_staff(_inst, _other, ds_map_find_value(pmx, "position")))) return;   // coaches/staff have no dev trait
+        // players from older saves: yours without a trait become normal, anyone else gets one rolled from potential
+        rbDevGetTrait(_inst, _other, pmx);
+        var bw = box.sprite_width, bh = box.sprite_height;
+        if (_inst.rbDevView) rbDevShow(_inst, _other, box);
+        if (rbGLClicked(box.x, box.y, bw, bh)) {
+            rbClickSnd(_inst, _other);
+            rbDevTraitSet(_inst, _other, box, !_inst.rbDevView);
+        }
+    } catch (e) {}
+}
+// ---- dev trait: 0 = normal (brown), 1 = star (silver), 2 = superstar (gold); stored on the player map as "dev_trait"
+var RB_DEV_TILE = [0, 2, 3];   // tile index in html5game/dev.png (24px tiles): brown, silver, gold
+// odds of a newly generated player's trait by potential (index = potential 0..12 from s_get_player_potential); tune these to taste
+var RB_DEV_STAR  = [0, .06, .10, .15, .21, .28, .35, .42, .48, .52, .55, .57, .58];
+var RB_DEV_SUPER = [0,   0, .005, .02, .04, .06, .09, .13, .18, .24, .30, .34, .37];
+// xp per game multiplier by dev trait: normal 1x, star 1.5x, superstar 2x
+var RB_DEV_XP_MULT = [1, 1.5, 2];
+function rbDevXpMult(pm) { try { return RB_DEV_XP_MULT[rbDevEnsure(pm)] || 1; } catch (e) { return 1; } }
+function rbDevRoll(_inst, _other, pm) {
+    try {
+        var pot = Math.max(0, Math.min(12, Math.round(Number(gml_Script_s_get_player_potential(_inst, _other, pm)))));
+        var r = Math.random(), t = 0;
+        if (r < RB_DEV_SUPER[pot]) t = 2;
+        else if (r < RB_DEV_SUPER[pot] + RB_DEV_STAR[pot]) t = 1;
+        ds_map_set(pm, "dev_trait", t);
+        return t;
+    } catch (e) { ds_map_set(pm, "dev_trait", 0); return 0; }
+}
+function rbDevOnTeam(_inst, _other, pm) {
+    try {
+        var M = yyInst(_inst, _other, 97);
+        if (ds_list_find_index(M.gmlroster, pm) >= 0) return true;
+        var L = M.gmlir_list;
+        return L !== undefined && L !== null && L >= 0 && ds_list_find_index(L, pm) >= 0;
+    } catch (e) { return false; }
+}
+function rbDevIsDraft(_inst, _other, pm) {
+    try { return ds_list_find_index(yyInst(_inst, _other, 97).gmldraftlist, pm) >= 0; } catch (e) { return false; }
+}
+function rbDevEnsure(pm) {
+    try {
+        if (pm === undefined || pm === null || pm < 0 || !yyGetBool(ds_exists(pm, 1))) return 0;
+        if (!yyGetBool(ds_map_exists(pm, "dev_trait"))) ds_map_set(pm, "dev_trait", 0);
+        var v = Math.round(Number(ds_map_find_value(pm, "dev_trait")));
+        if (!(v >= 0 && v <= 2)) { v = 0; ds_map_set(pm, "dev_trait", 0); }
+        return v;
+    } catch (e) { return 0; }
+}
+// every player on your team (roster + IR) always has a dev trait; missing ones become normal
+var rbDevSweepT = 0;
+function rbDevSweep(_inst, _other) {
+    try {
+        var now = g_pBuiltIn.get_current_time();
+        if (now - rbDevSweepT < 500) return;
+        rbDevSweepT = now;
+        var M = yyInst(_inst, _other, 97);
+        var lists = [M.gmlroster, M.gmlir_list];
+        for (var l = 0; l < lists.length; l++) {
+            var L = lists[l];
+            if (L === undefined || L === null || !(L >= 0) || !yyGetBool(ds_exists(L, 2))) continue;
+            for (var k = 0; k < ds_list_size(L); k++) rbDevEnsure(ds_list_find_value(L, k));
+        }
+    } catch (e) {}
+}
+var rbDevEl = null;
+function rbDevElGet() {
+    if (rbDevEl) return rbDevEl;
+    var c = document.getElementById("canvas");
+    if (!c || !c.parentNode) return null;
+    rbDevEl = document.createElement("div");
+    rbDevEl.id = "rb-dev";
+    rbDevEl.style.cssText = "position:fixed;display:none;z-index:15;pointer-events:none;background:url(html5game/dev.png) no-repeat;image-rendering:pixelated;image-rendering:crisp-edges;";
+    c.parentNode.appendChild(rbDevEl);
+    return rbDevEl;
+}
+function rbDevHide() { if (rbDevEl) rbDevEl.style.display = "none"; }
+// show this player's gem big, centred in the Development Trait box (below its title)
+// trait for any player: yours missing one -> normal, anyone else missing one -> rolled from potential
+function rbDevGetTrait(_i, _o, pm) {
+    try {
+        if (pm === undefined || pm === null || pm < 0 || !yyGetBool(ds_exists(pm, 1))) return 0;
+        if (!yyGetBool(ds_map_exists(pm, "dev_trait"))) { if (rbDevOnTeam(_i, _o, pm)) rbDevEnsure(pm); else rbDevRoll(_i, _o, pm); }
+        return rbDevEnsure(pm);
+    } catch (e) { return 0; }
+}
+var rbDevLast = 0;
+// gem + label layout inside a box (GUI coords): title on top, gem centred, label under the gem
+function rbDevLayout(x, y, w, h) {
+    var gs = Math.max(1, Math.floor(Math.min(w - 24, h - 52) / 24) - 1);   // whole-number scale of the 24px tile
+    var size = 24 * gs, top = y + 26, bot = y + h - 26;
+    return { gx: x + (w - size) / 2, gy: top + (bot - top - size) / 2, size: size, lx: x + w / 2, ly: y + h - 21 };
+}
+var RB_DEV_NAME = ["NORMAL DEV", "STAR DEV", "SUPERSTAR DEV"];
+// what the gem shows for a player (the real trait is always stored on him):
+//  your roster/IR -> real; CPU-team players, free agents, unscouted prospects -> locked; scouted prospects -> real if normal, blue "?" if star/superstar
+function rbDevFace(_i, _o, pm) {
+    var tr = rbDevGetTrait(_i, _o, pm), real = { tile: RB_DEV_TILE[tr], label: RB_DEV_NAME[tr] };
+    var locked = { tile: 4, label: "LOCKED DEV" };
+    try {
+        if (rbDevOnTeam(_i, _o, pm)) return real;
+        var M = yyInst(_i, _o, 97), t = Number(ds_map_find_value(pm, "teamid"));
+        if (t >= 0 && t !== Number(M.gmlmyteam_id)) return locked;
+        if (ds_list_find_index(M.gmlfreeagentlist, pm) >= 0) return locked;
+        if (ds_list_find_index(M.gmldraftlist, pm) >= 0) {
+            var known = rbPrScouted(pm) || rbMasterScout(_i, _o, pm);
+            if (!known) return locked;
+            return tr >= 1 ? { tile: 1, label: "UNKNOWN DEV" } : real;
+        }
+    } catch (e) {}
+    return real;
+}
+function rbDevLabel(_i, _o, lx, ly, pm) {
+    try {
+        draw_set_font(global.gmlfnt_small_flex); draw_set_halign(1); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
+        gml_Script_draw_hd_text(_i, _o, lx, ly, rbDevFace(_i, _o, pm).label);
+        draw_set_halign(0);
+    } catch (e) {}
+}
+// draw the player's gem big inside a box given in GUI coords (x, y, w, h); returns where its label goes
+function rbDevShowRect(_inst, _other, x, y, w, h, pm) {
+    var L = rbDevLayout(x, y, w, h);
+    var el = rbDevElGet(); if (!el) return L;
+    var c = document.getElementById("canvas"), r = c.getBoundingClientRect();
+    var gw = display_get_gui_width(), gh = display_get_gui_height();
+    if (!(r.width > 0) || !(gw > 0)) { el.style.display = "none"; return L; }
+    var sx = r.width / gw, sy = r.height / gh;
+    var tile = rbDevFace(_inst, _other, pm).tile;
+    var W = L.size * sx;
+    el.style.width = W + "px"; el.style.height = (L.size * sy) + "px";
+    el.style.left = (r.left + L.gx * sx) + "px"; el.style.top = (r.top + L.gy * sy) + "px";
+    el.style.backgroundSize = (W * 5) + "px " + (L.size * sy) + "px";
+    el.style.backgroundPosition = (-tile * W) + "px 0px";
+    el.style.display = "block";
+    rbDevLast = performance.now();
+    return L;
+}
+function rbDevShow(_inst, _other, box) { _inst.rbDevLbl = rbDevShowRect(_inst, _other, box.x, box.y, box.sprite_width, box.sprite_height, _inst.gmlpmap); }
+function rbDevProfileDraw(_inst, _other) { try { if (_inst.rbDevView && _inst.rbDevLbl) rbDevLabel(_inst, _other, _inst.rbDevLbl.lx, _inst.rbDevLbl.ly, _inst.gmlpmap); } catch (e) {} }
+// Prospects / Teams profile screens (custom drawn): click the SKILLS box to flip it to a smaller DEV TRAIT box and back.
+// Returns null while showing skills, or the (smaller) rect to draw the DEV TRAIT box in
+function rbDevScreenBox(_i, _o, st, x, y, w, h, m) {
+    try {
+        if (st.devM !== m) { st.devM = m; st.devView = false; st.devDown = false; rbDevHide(); }
+        var R = st.devView ? { x: x + 30, y: y + 11, w: w - 60, h: h - 22 } : { x: x, y: y, w: w, h: h };
+        var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+        var inb = mx >= R.x && mx <= R.x + R.w && my >= R.y && my <= R.y + R.h;
+        if (yyGetBool(mouse_check_button_pressed(1))) st.devDown = inb;
+        if (yyGetBool(mouse_check_button_released(1))) {
+            if (st.devDown && inb) { rbClickSnd(_i, _o); st.devView = !st.devView; if (!st.devView) rbDevHide(); }
+            st.devDown = false;
+        }
+        if (!st.devView) return null;
+        R = { x: x + 30, y: y + 11, w: w - 60, h: h - 22 };
+        st.devLbl = rbDevShowRect(_i, _o, R.x, R.y, R.w, R.h, m);
+        return R;
+    } catch (e) { return null; }
+}
+function rbDevTraitSet(_inst, _other, box, on) {
+    _inst.rbDevView = on;
+    if (on) {
+        if (_inst.rbAttrTitle === undefined) _inst.rbAttrTitle = box.gmltitle;
+        box.gmltitle = "Dev Trait";
+        // smaller box, kept centred where the attributes box was
+        var ow = box.sprite_width, oh = box.sprite_height;
+        _inst.rbDevOrig = { x: box.x, y: box.y, xs: box.image_xscale, ys: box.image_yscale };
+        box.image_xscale = _inst.rbDevOrig.xs * 0.7; box.image_yscale = _inst.rbDevOrig.ys * 0.88;
+        box.x = _inst.rbDevOrig.x + ow * 0.15; box.y = _inst.rbDevOrig.y + oh * 0.06;
+        _inst.rbDevHidden = [];
+        for (var k = 0; k < RB_DEV_HIDE.length; k++) {
+            var o = yyInst(_inst, _other, RB_DEV_HIDE[k]);
+            if (o && o.visible) { o.visible = false; _inst.rbDevHidden.push(RB_DEV_HIDE[k]); }
+        }
+        rbDevShow(_inst, _other, box);
+    } else {
+        rbDevHide();
+        _inst.rbDevLbl = null;
+        var g = _inst.rbDevOrig;
+        if (g) { box.image_xscale = g.xs; box.image_yscale = g.ys; box.x = g.x; box.y = g.y; _inst.rbDevOrig = null; }
+        if (_inst.rbAttrTitle !== undefined) box.gmltitle = _inst.rbAttrTitle;
+        var h = _inst.rbDevHidden || [];
+        for (var k = 0; k < h.length; k++) { var o2 = yyInst(_inst, _other, h[k]); if (o2) o2.visible = true; }
+        _inst.rbDevHidden = [];
+    }
 }
 // hide the "L" button while the XP-upgrade screens are showing (attribute buttons / continue); show it only on the normal profile view
 function rbGameLogSync(_inst, _other) {
@@ -1129,6 +1750,9 @@ function rbGameLogSync(_inst, _other) {
 // called at the start of obj_master's Draw GUI End (obj_master is persistent, so it runs in every room, including the Game Log room)
 function rbGameLogRoom(_inst, _other) {
     try {
+        rbDevSweep(_inst, _other);
+        if (rbDevEl && performance.now() - rbDevLast > 50) rbDevHide();   // nobody drew the gem this frame (left the screen)
+        if (g_pBuiltIn.get_current_room() === rbNegRoom) { rbNegDraw(_inst, _other); return; }
         if (g_pBuiltIn.get_current_room() !== rbGLRoom) return;
         var M = yyInst(_inst, _other, 97), pm = M.gmlplayer_profile;
         var fc = (global.gmlc_primary == 0) ? 16777215 : global.gmlc_primary, bg = global.gmlc_background;
@@ -1195,15 +1819,8 @@ function rbGameLogRoom(_inst, _other) {
         }
         draw_set_halign(0);
         var bx = 8, by = 232, sw = 33, sh = 32;
-        var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
-        var pr = mx >= bx && mx <= bx + sw && my >= by && my <= by + sh && mouse_check_button(1);
-        var ox = pr ? -2 : 0, oy = pr ? 2 : 0;
-        if (!pr) { draw_set_alpha(0.35); draw_rectangle_color(bx - 3, by + 3, bx + sw - 3, by + sh + 3, 0, 0, 0, 0, false); draw_set_alpha(1); }
-        draw_rectangle_color(bx + ox, by + oy, bx + ox + sw, by + oy + sh, 16777215, 16777215, 16777215, 16777215, false);
-        draw_rectangle_color(bx + ox + 2, by + oy + 2, bx + ox + sw - 2, by + oy + sh - 2, bg, bg, bg, bg, false);
-        draw_sprite_ext(_inst, 142, 0, bx + ox + sw / 2 + 1, by + oy + sh / 2 - 2, 1, 1, 0, 16777215, 1);
-        draw_set_colour(16777215);
-        if (rbGLClicked(bx, by, sw, sh) || keyboard_check_pressed(27)) room_goto(yyGetBool(M.gmlviewing_hof_players) ? 12 : 22);
+        rbDrawBackBtn(_inst, _other, bx, by, sw, sh);
+        if (rbBackClicked(_inst, _other, bx, by, sw, sh) || keyboard_check_pressed(27)) room_goto(yyGetBool(M.gmlviewing_hof_players) ? 12 : 22);
     } catch (e) {}
 }
 function rbLiveStatLine(pmap) {
@@ -4284,7 +4901,7 @@ gml_Script_s_create_message(_inst,_other,"",gmlmsg,gml_Script_s_str(_inst,_other
 "position")));gmlmsg=string_replace(gmlmsg,"$playername",gmlplayername);gmlmsg=string_replace(gmlmsg,"$num",string(gmlpick));gml_Script_s_create_message(_inst,_other,gml_Script_s_str(_inst,_other,"ui_TradePlayer"),gmlmsg,gml_Script_s_str(_inst,_other,"ui_Cancel"),gml_Script_s_str(_inst,_other,"ui_Confirm"),kgml_Script_s_msg_clear,kgml_Script_btn_response_in_trade_player_yes,global.gmlc_background,1);};}else {if(yyfequal(gmllist,yyInst(_inst,_other,97).gmlstorelist)){{var gmlcost=ds_map_find_value(yyInst(_inst,
 _other,97).gmlplayer_profile,"creditcost");if(yyfless(yyInst(_inst,_other,97).gmlcoach_credit,gmlcost)){{var gmlmsg=gml_Script_s_str(_inst,_other,"msg_SignPlayerStoreNoCredit");gmlmsg=string_replace(gmlmsg,"$num",string(gmlcost));gml_Script_s_create_message(_inst,_other,gml_Script_s_str(_inst,_other,"ui_SignPlayer"),gmlmsg,gml_Script_s_str(_inst,_other,"ui_Continue"),"",kgml_Script_s_store_cant_afford,"",global.gmlc_background,1);return;};};var gmlmsg=gml_Script_s_str(_inst,_other,"msg_SignPlayerStore");
 gmlmsg=string_replace(gmlmsg,"$num",string(gmlcost));gmlmsg=string_replace(gmlmsg,"$position",gml_Script_s_get_string_position_full(_inst,_other,ds_map_find_value(yyInst(_inst,_other,97).gmlplayer_profile,"position")));gmlmsg=string_replace(gmlmsg,"$playername",gmlplayername);gml_Script_s_create_message(_inst,_other,gml_Script_s_str(_inst,_other,"ui_SignPlayer"),gmlmsg,gml_Script_s_str(_inst,_other,"ui_No"),gml_Script_s_str(_inst,_other,"ui_Yes"),kgml_Script_s_msg_clear,kgml_Script_btn_response_pick_player_yes,
-global.gmlc_background,1);};}else {if(yyfequal(gmllist,yyInst(_inst,_other,97).gmlhoflist)){{var gmlmsg=gml_Script_s_str(_inst,_other,"msg_ReinstatePlayer");gmlmsg=string_replace(gmlmsg,"$playername",string_upper(gmlplayername));gmlmsg=string_replace(gmlmsg,"$salary",string(ds_map_find_value(yyInst(_inst,_other,97).gmlplayer_profile,"salary")));gml_Script_s_create_message(_inst,_other,gml_Script_s_str(_inst,_other,"ui_SignPlayer"),gmlmsg,gml_Script_s_str(_inst,_other,"ui_No"),gml_Script_s_str(_inst,
+global.gmlc_background,1);};}else {if(yyfequal(gmllist,yyInst(_inst,_other,97).gmlhoflist)){{var gmlmsg=gml_Script_s_str(_inst,_other,"msg_ReinstatePlayer");gmlmsg=string_replace(gmlmsg,"$playername",string_upper(gmlplayername));gmlmsg=string_replace(gmlmsg,"$salary",rbFmtM(ds_map_find_value(yyInst(_inst,_other,97).gmlplayer_profile,"salary")));gml_Script_s_create_message(_inst,_other,gml_Script_s_str(_inst,_other,"ui_SignPlayer"),gmlmsg,gml_Script_s_str(_inst,_other,"ui_No"),gml_Script_s_str(_inst,
 _other,"ui_Yes"),kgml_Script_s_msg_clear,kgml_Script_btn_response_pick_player_yes,global.gmlc_background,1);};}else {{var gmlmsg=gml_Script_s_str(_inst,_other,"msg_SignPlayer");if(yyfequal(ds_map_find_value(yyInst(_inst,_other,97).gmlplayer_profile,"age"),gml_Script_s_rookie_age_internal(_inst,_other))){gmlmsg=gml_Script_s_str(_inst,_other,"msg_SignRookie");};gmlmsg=string_replace(gmlmsg,"$position",gml_Script_s_get_string_position_full(_inst,_other,ds_map_find_value(yyInst(_inst,_other,97).gmlplayer_profile,
 "position")));gmlmsg=string_replace(gmlmsg,"$playername",gmlplayername);gml_Script_s_create_message(_inst,_other,gml_Script_s_str(_inst,_other,"ui_SignPlayer"),gmlmsg,gml_Script_s_str(_inst,_other,"ui_No"),gml_Script_s_str(_inst,_other,"ui_Yes"),kgml_Script_s_msg_clear,kgml_Script_btn_response_pick_player_yes,global.gmlc_background,1);};};};};}}function gml_GlobalScript_btn_click_Profile_Cut(_inst,_other){(_inst.gmlbtn_click_Profile_Cut=__yy_method(_inst,gml_Script_btn_click_Profile_Cut));(_inst.gmlbtn_click_Profile_JefeBoost=__yy_method(_inst,
 gml_Script_btn_click_Profile_JefeBoost));(_inst.gmls_JefeBoost=__yy_method(_inst,gml_Script_s_JefeBoost));(_inst.gmlbtn_click_Profile_JefeOutOfRetirement=__yy_method(_inst,gml_Script_btn_click_Profile_JefeOutOfRetirement));(_inst.gmls_JefeOutOfRetirement=__yy_method(_inst,gml_Script_s_JefeOutOfRetirement));}function gml_Script_btn_click_Profile_Cut(_inst,_other){{var gmlname=yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(yyInst(_inst,_other,97).gmlplayer_profile,"fname"))," "),__yy_gml_errCheck(ds_map_find_value(yyInst(_inst,
@@ -4447,8 +5064,8 @@ _other){(_inst.gmlbtn_response_skip_draft_yes=__yy_method(_inst,gml_Script_btn_r
 _other,97).gmldraft_round))));yyInst(_inst,_other,97).gmlcoach_credit=yyfplus(yyInst(_inst,_other,97).gmlcoach_credit,gmlvalue);};};gml_Script_s_end_draft_round(_inst,_other,false);}}function gml_GlobalScript_btn_response_pick_player_yes(_inst,_other){(_inst.gmlbtn_response_pick_player_yes=__yy_method(_inst,gml_Script_btn_response_pick_player_yes));}function gml_Script_btn_response_pick_player_yes(_inst,_other){{gml_Script_s_msg_clear(_inst,_other);{var __yy__v552=GetWithArray(97);for(var __yy__v553 in __yy__v552){
 if(!__yy__v552.hasOwnProperty(__yy__v553))continue;var __yy__v554=__yy__v552[__yy__v553];{var gmlfrom_team_id=ds_map_find_value(__yy__v554.gmlplayer_profile,"teamid");gml_Script_slog(__yy__v554,_inst,yyfplus("Pick player yes. TeamId = ",__yy_gml_errCheck(string(gmlfrom_team_id))));ds_map_set(__yy__v554.gmlplayer_profile,"signed_year",yyInst(_inst,_other,97).gmlyear);ds_map_set(__yy__v554.gmlplayer_profile,"teamid",yyInst(_inst,_other,97).gmlmyteam_id);ds_map_set(__yy__v554.gmlplayer_profile,"flash_time",
 g_pBuiltIn.get_current_time());ds_list_add(__yy__v554.gmlroster,__yy__v554.gmlplayer_profile);var gmlpos=ds_list_find_index(__yy__v554.gmlfreeagentlist,__yy__v554.gmlplayer_profile);if(yyfgreater(gmlpos,(-1))){{var gmlmsg=gml_Script_s_str(__yy__v554,_inst,"news_SignFreeAgent");if(yyfequal(gmlfrom_team_id,__yy__v554.gmlmyteam_id)){gmlmsg=gml_Script_s_str(__yy__v554,_inst,"news_ResignedPlayer");};gmlmsg=gml_Script_s_parse_player_message(__yy__v554,_inst,gmlmsg,__yy__v554.gmlplayer_profile);gml_Script_s_add_news(__yy__v554,
-_inst,gmlmsg);gml_Script_s_complete_achievement(__yy__v554,_inst,"ACH_FREEAGENT");if(yyfgreaterequal(gml_Script_s_get_player_rating(__yy__v554,_inst,__yy__v554.gmlplayer_profile),10)){gml_Script_s_complete_achievement(__yy__v554,_inst,"ACH_FREEAGENT5");};ds_list_delete(__yy__v554.gmlfreeagentlist,gmlpos);room_goto(25);return;};};gmlpos=ds_list_find_index(__yy__v554.gmltradelist,__yy__v554.gmlplayer_profile);if(yyfgreater(gmlpos,(-1))){{var gmlmsg=gml_Script_s_str(__yy__v554,_inst,"news_SignTrade");
-gmlmsg=gml_Script_s_parse_player_message(__yy__v554,_inst,gmlmsg,__yy__v554.gmlplayer_profile);gmlmsg=string_replace(gmlmsg,"$otherteamname",gml_Script_s_get_team_name_by_id(__yy__v554,_inst,gmlfrom_team_id));gml_Script_s_add_news(__yy__v554,_inst,gmlmsg);gml_Script_s_complete_achievement(__yy__v554,_inst,"ACH_TRADEIN");ds_list_delete(__yy__v554.gmltradelist,gmlpos);room_goto(25);return;};};gmlpos=ds_list_find_index(__yy__v554.gmldraftlist,__yy__v554.gmlplayer_profile);if(yyfgreater(gmlpos,(-1))){
+_inst,gmlmsg);gml_Script_s_complete_achievement(__yy__v554,_inst,"ACH_FREEAGENT");if(yyfgreaterequal(gml_Script_s_get_player_rating(__yy__v554,_inst,__yy__v554.gmlplayer_profile),10)){gml_Script_s_complete_achievement(__yy__v554,_inst,"ACH_FREEAGENT5");};ds_list_delete(__yy__v554.gmlfreeagentlist,gmlpos);global.rbRosterFrom=14;room_goto(25);return;};};gmlpos=ds_list_find_index(__yy__v554.gmltradelist,__yy__v554.gmlplayer_profile);if(yyfgreater(gmlpos,(-1))){{var gmlmsg=gml_Script_s_str(__yy__v554,_inst,"news_SignTrade");
+gmlmsg=gml_Script_s_parse_player_message(__yy__v554,_inst,gmlmsg,__yy__v554.gmlplayer_profile);gmlmsg=string_replace(gmlmsg,"$otherteamname",gml_Script_s_get_team_name_by_id(__yy__v554,_inst,gmlfrom_team_id));gml_Script_s_add_news(__yy__v554,_inst,gmlmsg);gml_Script_s_complete_achievement(__yy__v554,_inst,"ACH_TRADEIN");ds_list_delete(__yy__v554.gmltradelist,gmlpos);global.rbRosterFrom=14;room_goto(25);return;};};gmlpos=ds_list_find_index(__yy__v554.gmldraftlist,__yy__v554.gmlplayer_profile);if(yyfgreater(gmlpos,(-1))){
 {rbDlNoteUser(__yy__v554,_inst,__yy__v554.gmlplayer_profile);if(yyGetBool(gml_Script_s_is_co_mode(__yy__v554,_inst))){{gml_Script_s_college_admissions_pick_player(__yy__v554,_inst,gmlpos);};}else {{__yy__v554.gmldraft_picks=__yy_gml_array_check(__yy__v554.gmldraft_picks,3121505537);(g_yyPrePostObject__=__yy__v554.gmldraft_picks[__yy_gml_array_check_index_set(yyfminus(__yy_gml_errCheck(__yy__v554.gmldraft_round),1))],__yy__v554.gmldraft_picks[__yy_gml_array_check_index_set(yyfminus(__yy_gml_errCheck(__yy__v554.gmldraft_round),1))]=(g_yyPrePostObject__ instanceof Long?__yy__v554.gmldraft_picks[__yy_gml_array_check_index_set(yyfminus(__yy_gml_errCheck(__yy__v554.gmldraft_round),
 1))].subtract(1):--__yy__v554.gmldraft_picks[__yy_gml_array_check_index_set(yyfminus(__yy_gml_errCheck(__yy__v554.gmldraft_round),1))]),g_yyPrePostObject__);ds_list_delete(__yy__v554.gmldraftlist,gmlpos);};};room_goto(25);gml_Script_s_complete_achievement(__yy__v554,_inst,"ACH_DRAFT");return;};};gmlpos=ds_list_find_index(__yy__v554.gmlstorelist,__yy__v554.gmlplayer_profile);if(yyfgreater(gmlpos,(-1))){{var gmlmsg=gml_Script_s_str(__yy__v554,_inst,"news_SignTrade2");gmlmsg=gml_Script_s_parse_player_message(__yy__v554,
 _inst,gmlmsg,__yy__v554.gmlplayer_profile);gml_Script_s_add_news(__yy__v554,_inst,gmlmsg);__yy__v554.gmlcoach_credit=yyfminus(__yy__v554.gmlcoach_credit,ds_map_find_value(__yy__v554.gmlplayer_profile,"creditcost"));ds_map_set(__yy__v554.gmlmap_options,"op_credits_purchased",max(yyfminus(__yy_gml_errCheck(ds_map_find_value(__yy__v554.gmlmap_options,"op_credits_purchased")),__yy_gml_errCheck(ds_map_find_value(__yy__v554.gmlplayer_profile,"creditcost"))),0));rbCutBought(__yy__v554.gmlplayer_profile);ds_list_delete(__yy__v554.gmlstorelist,gmlpos);
@@ -4676,7 +5293,7 @@ argument1)),real(ds_map_find_value(gmlbestmap,argument1)))){gmlbestmap=gmlmap;};
 gml_Script_s_check_draft));}function gml_Script_s_check_draft(_inst,_other){{{var __yy__v650=GetWithArray(97);for(var __yy__v651 in __yy__v650){if(!__yy__v650.hasOwnProperty(__yy__v651))continue;var __yy__v652=__yy__v650[__yy__v651];{if(yyGetBool(__yy__v652.gmlqb_mode)){{gml_Script_s_check_draft_QB(__yy__v652,_inst);return;};};if(yyGetBool(gml_Script_s_is_co_mode(__yy__v652,_inst))){{gml_Script_s_check_draft_CO(__yy__v652,_inst);return;};};gml_Script_slog(__yy__v652,_inst,"s_check_draft");gml_Script_slog(__yy__v652,
 _inst,yyfplus("Week = ",__yy_gml_errCheck(string(__yy__v652.gmlweek))));gml_Script_slog(__yy__v652,_inst,yyfplus("Draft = ",__yy_gml_errCheck(string(__yy__v652.gmldraft_round))));if(yyfgreater(__yy__v652.gmlintro,0)){{};}else {if(yyfequal(__yy__v652.gmlweek,1)){{if(yyGetBool(ds_list_size(yyInst(_inst,_other,97).gmlfreeagentlist))){{__yy__v652.gmlstage=1;room_goto(7);return;};}else {{var ___sw356___=__yy__v652.gmldraft_round;var ___swc357___=-1;if(yyCompareVal(___sw356___,1,g_GMLMathEpsilon,false)==0){
 ___swc357___=0;}else if(yyCompareVal(___sw356___,2,g_GMLMathEpsilon,false)==0){___swc357___=1;}else if(yyCompareVal(___sw356___,3,g_GMLMathEpsilon,false)==0){___swc357___=2;}switch(___swc357___){case 0:{if(yyfless(ds_list_size(__yy__v652.gmldraftlist),50)){gml_Script_s_create_draftlist(__yy__v652,_inst);};room_goto(5);return;break;}case 1:{room_goto(5);return;break;}case 2:{room_goto(5);return;break;}};};};};}else {if((yyGetBool(yyfgreaterequal(ds_list_size(yyInst(_inst,_other,97).gmlroster),(yyfgreater(yyInst(_inst,_other,97).gmlsalary_cap,350)?30:(yyfgreater(yyInst(_inst,_other,97).gmlsalary_cap,275)?20:(yyfgreater(yyInst(_inst,_other,97).gmlsalary_cap,200)?16:12))))))||(yyGetBool((yyGetBool(yyfless(yyInst(_inst,
-_other,97).gmlsalary_cap,200)))&&(yyGetBool(yyfgreaterequal(ds_list_size(yyInst(_inst,_other,97).gmlroster),10)))))){{gml_Script_s_clear_freeagents(__yy__v652,_inst);};}else {if((yyGetBool(yyfless(__yy__v652.gmlweek,8)))&&(yyGetBool(!yyGetBool(__yy__v652.gmloffers_done)))){{__yy__v652.gmloffers_done=true;if((yyGetBool(ds_list_size(yyInst(_inst,_other,97).gmlfreeagentlist)))||(yyGetBool(ds_list_size(yyInst(_inst,_other,97).gmltradelist)))){{room_goto(7);return;};};var ___sw358___=irandom(2);var ___swc359___=-1;
+_other,97).gmlsalary_cap,200)))&&(yyGetBool(yyfgreaterequal(ds_list_size(yyInst(_inst,_other,97).gmlroster),10)))))){{gml_Script_s_clear_freeagents(__yy__v652,_inst);};}else {if((yyGetBool(yyfless(__yy__v652.gmlweek,8)))&&(yyGetBool(!yyGetBool(__yy__v652.gmloffers_done)))){{__yy__v652.gmloffers_done=true;if((yyGetBool(ds_list_size(yyInst(_inst,_other,97).gmlfreeagentlist)))||(yyGetBool(ds_list_size(yyInst(_inst,_other,97).gmltradelist)))){{room_goto(7);return;};};var ___sw358___=irandom(0);var ___swc359___=-1;
 if(yyCompareVal(___sw358___,0,g_GMLMathEpsilon,false)==0){___swc359___=0;}else if(yyCompareVal(___sw358___,1,g_GMLMathEpsilon,false)==0){___swc359___=1;}else if(yyCompareVal(___sw358___,2,g_GMLMathEpsilon,false)==0){___swc359___=2;}switch(___swc359___){case 0:{gml_Script_s_create_freeagentlist(__yy__v652,_inst,1);var gmlpmap=ds_list_find_value(yyInst(_inst,_other,97).gmlfreeagentlist,0);if(yyGetBool(gmlpmap)){{if((yyGetBool(gml_Script_s_position_already_on_roster(__yy__v652,_inst,ds_map_find_value(gmlpmap,
 "position"))))||(yyGetBool(yyfgreater(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"salary")),__yy_gml_errCheck(gml_Script_s_get_salary_total(__yy__v652,_inst))),yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,97).gmlsalary_cap),__yy_gml_errCheck(yyInst(_inst,_other,97).gmlboost_salary_cap)))))){{gml_Script_s_clear_freeagents(__yy__v652,_inst);break;};};yyInst(_inst,_other,97).gmlplayer_profile=gmlpmap;var gmlstaffmap=(-4);var gmlmsg=gml_Script_s_str(__yy__v652,_inst,"msg_FreeAgentOffer");if(yyfequal(ds_map_find_value(gmlpmap,
 "age"),gml_Script_s_rookie_age_internal(__yy__v652,_inst))){{gmlmsg=gml_Script_s_str(__yy__v652,_inst,"msg_FreeAgentOffer_Rookie");if(yyGetBool(gml_Script_s_is_offensive_player(__yy__v652,_inst,gmlpmap))){gmlstaffmap=gml_Script_s_get_staff(__yy__v652,_inst,102);}else {gmlstaffmap=gml_Script_s_get_staff(__yy__v652,_inst,101);};};};gmlmsg=string_replace(gmlmsg,"$playername",yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"fname"))," "),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"lname"))));
@@ -4720,8 +5337,8 @@ var gmlstaffpos=argument0;var gmli=0;for(;yyfless(gmli,ds_list_size(__yy__v675.g
 }function gml_Script_s_reset_draft_picks(_inst,_other){{{var __yy__v676=GetWithArray(97);for(var __yy__v677 in __yy__v676){if(!__yy__v676.hasOwnProperty(__yy__v677))continue;var __yy__v678=__yy__v676[__yy__v677];{__yy__v678.gmldraft_picks=__yy_gml_array_check(__yy__v678.gmldraft_picks,91525869);__yy__v678.gmldraft_picks[__yy_gml_array_check_index_set(0)]=yyfplus(__yy__v678.gmldraft_picks[__yy_gml_array_check_index_set(0)],1);__yy__v678.gmldraft_picks[__yy_gml_array_check_index_set(1)]=yyfplus(__yy__v678.gmldraft_picks[__yy_gml_array_check_index_set(1)],
 1);__yy__v678.gmldraft_picks[__yy_gml_array_check_index_set(2)]=yyfplus(__yy__v678.gmldraft_picks[__yy_gml_array_check_index_set(2)],1);gml_Script_s_savegame(__yy__v678,_inst);}}};}}function gml_GlobalScript_poki_btn_click_CoinBoost(_inst,_other){(_inst.gmlpoki_btn_click_CoinBoost=__yy_method(_inst,gml_Script_poki_btn_click_CoinBoost));(_inst.gmlpoki_CoinBoost_No=__yy_method(_inst,gml_Script_poki_CoinBoost_No));(_inst.gmlpoki_CoinBoost_Yes=__yy_method(_inst,gml_Script_poki_CoinBoost_Yes));}function gml_Script_poki_btn_click_CoinBoost(_inst,
 _other){{gml_Script_slog(_inst,_other,"poki_btn_click_CoinBoost");gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,"poki_CoinBoostMsg"),gml_Script_s_str(_inst,_other,"ui_No"),gml_Script_s_str(_inst,_other,"ui_Yes"),kgml_Script_poki_CoinBoost_No,kgml_Script_poki_CoinBoost_Yes,global.gmlc_background,1);}}function gml_Script_poki_CoinBoost_No(_inst,_other){{gml_Script_s_msg_clear(_inst,_other);layer_set_visible(layer_get_id("Poki_Layer"),false);}}function gml_Script_poki_CoinBoost_Yes(_inst,
-_other){{global.gmlpoki_done_post_match_reward=true;gml_Script_poki_CoinBoost_No(_inst,_other);gml_Script_poki_pause(_inst,_other);gml_Script_poki_rewarded_break(_inst,_other,kgml_Script__poki_rewarded_ad,"rewarded_break");}}function gml_GlobalScript_s_update_draft_page(_inst,_other){(_inst.gmls_update_draft_page=__yy_method(_inst,gml_Script_s_update_draft_page));}function gml_Script_s_update_draft_page(_inst,_other){{rbDraftSetup(_inst,_other);{var __yy__v679=GetWithArray(49);for(var __yy__v680 in __yy__v679){if(!__yy__v679.hasOwnProperty(__yy__v680))continue;
-var __yy__v681=__yy__v679[__yy__v680];instance_destroy(__yy__v681);}};var gmlrx=rbDlGx0();var gmlry=rbDlGy0();var gmlfirst=yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(yyInst(_inst,_other,97).gmldraft_page),1)),10);var gmllast=min(yyfplus(__yy_gml_errCheck(gmlfirst),10),ds_list_size(yyInst(_inst,_other,97).gmldraftlist));var gmlcount=0;var gmlr=gmlfirst;for(;yyfless(gmlr,gmllast);(g_yyPrePostObject__=gmlr,gmlr=(g_yyPrePostObject__ instanceof Long?gmlr.add(1):++gmlr),g_yyPrePostObject__)){{_inst.gmlprofile=__yy_gml_array_check(_inst.gmlprofile,
+_other){{global.gmlpoki_done_post_match_reward=true;gml_Script_poki_CoinBoost_No(_inst,_other);gml_Script_poki_pause(_inst,_other);gml_Script_poki_rewarded_break(_inst,_other,kgml_Script__poki_rewarded_ad,"rewarded_break");}}function gml_GlobalScript_s_update_draft_page(_inst,_other){(_inst.gmls_update_draft_page=__yy_method(_inst,gml_Script_s_update_draft_page));}function gml_Script_s_update_draft_page(_inst,_other){{rbDraftSetup(_inst,_other);rbDlViewFix(_inst,_other);{var __yy__v679=GetWithArray(49);for(var __yy__v680 in __yy__v679){if(!__yy__v679.hasOwnProperty(__yy__v680))continue;
+var __yy__v681=__yy__v679[__yy__v680];instance_destroy(__yy__v681);}};var gmlrx=rbDlGx0();var gmlry=rbDlGy0();var gmlfirst=yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(yyInst(_inst,_other,97).gmldraft_page),1)),10);var gmllast=min(yyfplus(__yy_gml_errCheck(gmlfirst),10),rbDlViewSize(yyInst(_inst,_other,97).gmldraftlist));var gmlcount=0;var gmlr=gmlfirst;for(;yyfless(gmlr,gmllast);(g_yyPrePostObject__=gmlr,gmlr=(g_yyPrePostObject__ instanceof Long?gmlr.add(1):++gmlr),g_yyPrePostObject__)){{_inst.gmlprofile=__yy_gml_array_check(_inst.gmlprofile,
 4083195518);_inst.gmlprofile[__yy_gml_array_check_index_set(gmlcount)]=instance_create_layer(gmlrx,gmlry,"Instances",49);gmlrx=yyfplus(gmlrx,rbDlDx());yyInst(_inst,_other,_inst.gmlprofile[__yy_gml_array_check_index(gmlcount,_inst.gmlprofile)]).gmlpmap=ds_list_find_value(yyInst(_inst,_other,97).gmldraftlist,gmlr);if(yyfequal((g_yyPrePostObject__=gmlcount,gmlcount=(g_yyPrePostObject__ instanceof Long?gmlcount.add(1):++gmlcount),g_yyPrePostObject__),4)){{gmlrx=rbDlGx0();gmlry=yyfplus(gmlry,rbDlDy());};};}};rbDlLayout(_inst,_other);global.rbDrCard=_inst.gmlprofile[0];var gmlpg=yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,
 _other,"ui_Page"))," "),__yy_gml_errCheck(string(yyInst(_inst,_other,97).gmldraft_page))),"/"),__yy_gml_errCheck(string(_inst.gmlpage_max)));if(yyflessequal(_inst.gmlpage_max,1)){gmlpg=yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Page"))," "),__yy_gml_errCheck(string(yyInst(_inst,_other,97).gmldraft_page)));};yyInst(_inst,_other,100064).gmltext=gmlpg;yyInst(_inst,_other,100062).visible=true;yyInst(_inst,_other,100063).visible=true;if(yyfequal(yyInst(_inst,_other,97).gmldraft_page,
 1)){yyInst(_inst,_other,100062).visible=false;};if(yyfequal(yyInst(_inst,_other,97).gmldraft_page,_inst.gmlpage_max)){yyInst(_inst,_other,100063).visible=false;};}}function gml_GlobalScript_s_update_freeagents_page(_inst,_other){(_inst.gmls_update_freeagents_page=__yy_method(_inst,gml_Script_s_update_freeagents_page));}function gml_Script_s_update_freeagents_page(_inst,_other){{gml_Script_slog(_inst,_other,"s_update_freeagents");rbFaDedupe(_inst,_other);if(rbFaPage(_inst,_other)){return;}{var __yy__v682=GetWithArray(49);for(var __yy__v683 in __yy__v682){if(!__yy__v682.hasOwnProperty(__yy__v683))continue; var __yy__v684=__yy__v682[__yy__v683];instance_destroy(__yy__v684);}};var gmllist=yyInst(_inst,_other,97).gmlfreeagentlist;var gmlsize=ds_list_size(gmllist);if(yyfless(gmlsize,1)){{gml_Script_slog(_inst,_other,"tradeoffer");gmllist=yyInst(_inst,_other,97).gmltradelist;gmlsize=ds_list_size(gmllist);yyInst(_inst,_other,100123).gmltext=gml_Script_s_str(_inst,_other,"ui_TradeOffer");};};var gmlgap=4;var gmlmax_roster=10;if(yyfgreater(gmlsize,10)){gmlmax_roster=12;};var gmlcards_per_row=yyfdivide(__yy_gml_errCheck(gmlmax_roster), 2);if(yyflessequal(gmlsize,10)){{gmlcards_per_row=5;gmlgap=8;};};if(yyflessequal(gmlsize,8)){gmlcards_per_row=4;};if(yyflessequal(gmlsize,6)){gmlcards_per_row=3;};var gmlpx=round(yyftime(__yy_gml_errCheck(g_pBuiltIn.room_width),0.5));var gmlpy=round(yyftime(__yy_gml_errCheck(g_pBuiltIn.room_height),0.49));var gmlpw=yyfplus(__yy_gml_errCheck(sprite_get_width(172)),__yy_gml_errCheck(gmlgap));if(yyfgreater(gmlsize,gmlcards_per_row)){{gmlpy=yyfminus(gmlpy,44);gmlpx=yyfminus(gmlpx,yyftime(yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlcards_per_row), 1)),__yy_gml_errCheck(gmlpw)),0.5));};}else {{gmlpx=yyfminus(gmlpx,yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlsize),1)),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw),0.5))));};};var gmli=0;for(;yyfless(gmli,gmlsize);(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{_inst.gmlprofile=__yy_gml_array_check(_inst.gmlprofile,4083195518);_inst.gmlprofile[__yy_gml_array_check_index_set(gmli)]=instance_create_layer(0,0,"Instances", 49);yyInst(_inst,_other,_inst.gmlprofile[__yy_gml_array_check_index(gmli,_inst.gmlprofile)]).gmlpmap=ds_list_find_value(gmllist,gmli);yyInst(_inst,_other,_inst.gmlprofile[__yy_gml_array_check_index(gmli,_inst.gmlprofile)]).x=yyfminus(__yy_gml_errCheck(gmlpx),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw),0.5)));yyInst(_inst,_other,_inst.gmlprofile[__yy_gml_array_check_index(gmli,_inst.gmlprofile)]).y=yyfminus(__yy_gml_errCheck(gmlpy),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(yyInst(_inst,_other, _inst.gmlprofile[__yy_gml_array_check_index(0,_inst.gmlprofile)]).sprite_height),0.5)));gmlpx=yyfplus(gmlpx,gmlpw);if(yyfequal(gmli,yyfminus(__yy_gml_errCheck(gmlcards_per_row),1))){{var gmlsz=yyfminus(__yy_gml_errCheck(gmlsize),__yy_gml_errCheck(gmlcards_per_row));gmlpx=yyftime(__yy_gml_errCheck(g_pBuiltIn.room_width),0.5);gmlpx=yyfminus(gmlpx,yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlsz),1)),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw),0.5))));gmlpy=yyfplus(gmlpy,88);};};}}; if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{yyInst(_inst,_other,100128).visible=false;};};}}function gml_GlobalScript_s_college_admissions_draft(_inst,_other){(_inst.gmls_check_draft_CO=__yy_method(_inst,gml_Script_s_check_draft_CO));(_inst.gmls_college_free_agent_check=__yy_method(_inst,gml_Script_s_college_free_agent_check));(_inst.gmlbtn_respose_college_free_agent_yes=__yy_method(_inst,gml_Script_btn_respose_college_free_agent_yes));(_inst.gmls_college_dilemma_check=__yy_method(_inst,
@@ -5391,7 +6008,7 @@ _other,"tla_Skill"));ds_list_add(_inst.gmll_tds,gml_Script_s_str(_inst,_other,"t
 };ds_list_add(_inst.gmll_rating,gml_Script_s_str(_inst,_other,"tla_Contract"));if(yyGetBool(argument1)){{ds_list_add(_inst.gmll_xp,yyfplus("+",__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_XP"))));ds_list_add(_inst.gmll_levelup,gml_Script_s_str(_inst,_other,"short_LevelUp"));};}else {{if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_xp,gml_Script_s_str(_inst,_other,"ui_Year_Short"));};}else {{ds_list_add(_inst.gmll_xp,gml_Script_s_str(_inst,_other,"tla_Age"));};};
 ds_list_add(_inst.gmll_levelup,gml_Script_s_str(_inst,_other,"short_LevelXP"));};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_gpa,gml_Script_s_str(_inst,_other,"ui_GPA"));};};var gmli=0;for(;yyfless(gmli,ds_list_size(yyInst(_inst,_other,97).gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(yyInst(_inst,_other,97).gmlroster,gmli);ds_list_add(_inst.gmll_attitude,ds_map_find_value(gmlpmap,
 "attitude"));ds_list_add(_inst.gmll_names,gml_Script_s_get_player_name(_inst,_other,gmlpmap,true));ds_list_add(_inst.gmll_pos,ds_map_find_value(gmlpmap,"position"));ds_list_add(_inst.gmll_condition,ds_map_find_value(gmlpmap,"condition"));ds_list_add(_inst.gmll_resting,ds_map_find_value(gmlpmap,"resting"));ds_list_add(_inst.gmll_yards,ds_map_find_value(gmlpmap,"skill"));ds_list_add(_inst.gmll_tds,ds_map_find_value(gmlpmap,"strength"));ds_list_add(_inst.gmll_tackles,ds_map_find_value(gmlpmap,"speed"));
-ds_list_add(_inst.gmll_intsacks,ds_map_find_value(gmlpmap,"stamina"));if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_suspended,ds_map_find_value(gmlpmap,"suspended"));};};if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){ds_list_add(_inst.gmll_fumbles,gml_Script_s_get_player_rating(_inst,_other,gmlpmap));}else {ds_list_add(_inst.gmll_fumbles,yyfplus(yyfplus("$",__yy_gml_errCheck(string(ds_map_find_value(gmlpmap,"salary")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,
+ds_list_add(_inst.gmll_intsacks,ds_map_find_value(gmlpmap,"stamina"));if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_suspended,ds_map_find_value(gmlpmap,"suspended"));};};if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){ds_list_add(_inst.gmll_fumbles,gml_Script_s_get_player_rating(_inst,_other,gmlpmap));}else {ds_list_add(_inst.gmll_fumbles,yyfplus(yyfplus("$",__yy_gml_errCheck(rbFmtM(ds_map_find_value(gmlpmap,"salary")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,
 "sla_Million"))));};ds_list_add(_inst.gmll_rating,yyfplus(__yy_gml_errCheck(string(ds_map_find_value(gmlpmap,"contract"))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Year"))));if(yyGetBool(argument1)){{ds_list_add(_inst.gmll_xp,ds_map_find_value(gmlpmap,"xp_gain"));if(yyGetBool(gml_Script_s_has_xp_gain(_inst,_other,gmlpmap))){ds_list_add(_inst.gmll_levelup,yyfplus("flash_",__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Yes"))));}else {ds_list_add(_inst.gmll_levelup,gml_Script_s_str(_inst,
 _other,"ui_No"));};};}else {{if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_xp,gml_Script_s_college_age_simple_short(_inst,_other,gmlpmap));};}else {{ds_list_add(_inst.gmll_xp,ds_map_find_value(gmlpmap,"age"));};};ds_list_add(_inst.gmll_levelup,ds_map_find_value(gmlpmap,"xp_level"));};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{ds_list_add(_inst.gmll_gpa,gml_Script_s_gpa_string(_inst,_other,gmlpmap));};};}};};}else {{ds_list_add(_inst.gmll_attitude,gml_Script_s_str(_inst,
 _other,"tla_Attitude"));ds_list_add(_inst.gmll_names,gml_Script_s_str(_inst,_other,"ui_Name"));ds_list_add(_inst.gmll_pos,gml_Script_s_str(_inst,_other,"tla_Position"));ds_list_add(_inst.gmll_condition,gml_Script_s_str(_inst,_other,"tla_Condition"));ds_list_add(_inst.gmll_resting,"");ds_list_add(_inst.gmll_yards,gml_Script_s_str(_inst,_other,"ui_stat_yards"));ds_list_add(_inst.gmll_tds,gml_Script_s_str(_inst,_other,"ui_stat_touchdowns"));ds_list_add(_inst.gmll_tackles,gml_Script_s_str(_inst,_other,
@@ -6342,7 +6959,7 @@ _other);gml_Script_s_update_music(_inst,_other);gml_Script_s_play(_inst,_other,1
 var gmlinjury_done=false;var gmloc=gml_Script_s_get_staff(__yy__v1227,_inst,102);var gmldc=gml_Script_s_get_staff(__yy__v1227,_inst,101);if(!yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){{ds_map_set(gmloc,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmloc,"xp_gain")),__yy_gml_errCheck(clamp(round(yyftime(__yy_gml_errCheck(ds_map_find_value(gmloc,"attitude")),0.25)),1,25))));ds_map_set(gmldc,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmldc,"xp_gain")),__yy_gml_errCheck(clamp(round(yyftime(__yy_gml_errCheck(ds_map_find_value(gmldc,
 "attitude")),0.25)),1,25))));};};rbQbFromReceivers(__yy__v1227.gmlroster);var gmltotal_passing=0;var gmlqb_passing=0;var gmltotal_rushing=0;var gmli=0;for(;yyfless(gmli,ds_list_size(__yy__v1227.gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(__yy__v1227.gmlroster,gmli);gml_Script_s_check_for_return_stats(__yy__v1227,_inst,gmlpmap);gml_Script_s_update_party_meter(__yy__v1227,_inst,gmlpmap);if(!yyGetBool(ds_map_exists(gmlpmap,"xp_dev"))){ds_map_set(gmlpmap,
 "xp_dev",random_range(0.75,1.5));};if((yyGetBool(yyfless(ds_map_find_value(gmlpmap,"condition"),0)))||((yyGetBool(gml_Script_s_player_benched(__yy__v1227,_inst,gmlpmap))&&!rbHasStats(gmlpmap)))){continue;};if((yyGetBool(ds_map_exists(gmlpmap,"backup")))&&(yyGetBool(ds_map_find_value(gmlpmap,"backup")))&&(!rbHasStats(gmlpmap))&&(yyGetBool((yyGetBool(!yyGetBool(ds_map_exists(gmlpmap,"kr"))))||(yyGetBool(!yyGetBool(ds_map_find_value(gmlpmap,"kr"))))))){{ds_map_set(gmlpmap,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"xp_gain")),
-__yy_gml_errCheck(round(yyftime(10,__yy_gml_errCheck(real(ds_map_find_value(gmlpmap,"xp_dev"))))))));continue;};};ds_map_set_post(gmlpmap,"season_games",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_games")),1));rbFpsRecordGame(gmlpmap,gml_Script_s_get_opponent_team_tla(__yy__v1227,_inst),gml_Script_s_get_match_rating(__yy__v1227,_inst,gmlpmap),rbGLWeekLabel(__yy__v1227,_inst),__yy__v1227.gmlroster);ds_map_set(gmlpmap,"season_attempts",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_attempts")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_attempts"))));ds_map_set(gmlpmap,"season_complete",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_complete")),
+__yy_gml_errCheck(round(yyftime(10,__yy_gml_errCheck(rbDevXpMult(gmlpmap)))))));continue;};};ds_map_set_post(gmlpmap,"season_games",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_games")),1));rbFpsRecordGame(gmlpmap,gml_Script_s_get_opponent_team_tla(__yy__v1227,_inst),gml_Script_s_get_match_rating(__yy__v1227,_inst,gmlpmap),rbGLWeekLabel(__yy__v1227,_inst),__yy__v1227.gmlroster);ds_map_set(gmlpmap,"season_attempts",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_attempts")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_attempts"))));ds_map_set(gmlpmap,"season_complete",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_complete")),
 __yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_complete"))));ds_map_set(gmlpmap,"season_yards",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_yards")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_yards"))));ds_map_set(gmlpmap,"season_touchdowns",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_touchdowns")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_touchdowns"))));ds_map_set(gmlpmap,"season_fumbles",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_fumbles")),
 __yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_fumbles"))));ds_map_set(gmlpmap,"season_int",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_int")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_int"))));ds_map_set(gmlpmap,"season_sacks",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_sacks")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_sacks"))));ds_map_set(gmlpmap,"season_tackles",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_tackles")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,
 "stat_tackles"))));ds_map_set(gmlpmap,"season_rush_attempts",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_rush_attempts")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_rush_attempts"))));ds_map_set(gmlpmap,"season_rush_yards",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_rush_yards")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_rush_yards"))));ds_map_set(gmlpmap,"season_rush_touchdowns",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"season_rush_touchdowns")),
@@ -6385,7 +7002,7 @@ yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_touchdowns")),5));gmlx
 yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_yards")),0.4));gmleffort=clamp(yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_yards")),__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_yards")))),50),0,10);break;}case 5:{gmlxp_g=yyfplus(gmlxp_g,yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_tackles")),5));gmlxp_g=yyfminus(gmlxp_g,yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_sacks")),2.5));gmleffort=yyfplus(gmleffort,ds_map_find_value(gmlpmap,
 "stat_tackles"));break;}default :{gmlxp_g=yyfplus(gmlxp_g,yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_tackles")),5));gmlxp_g=yyfplus(gmlxp_g,yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_fumbles")),5));gmlxp_g=yyfplus(gmlxp_g,yyftime(yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_sacks")),2.5),2));gmlxp_g=yyfplus(gmlxp_g,yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stat_return_yards")),0.1));gmlxp_g=yyfplus(gmlxp_g,yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,
 "stat_return_tds")),5));gmleffort=yyfplus(gmleffort,ds_map_find_value(gmlpmap,"stat_tackles"));break;}};if(rbFpsApplies(gmlpmap)){gmlxp_g=yyfplus(yyftime(__yy_gml_errCheck(__yy__v1227.gmlfacility_training),2),yyftime(gml_Script_s_get_match_rating(__yy__v1227,_inst,gmlpmap),RB_FPS_XP_PER_RATING));};if((yyGetBool(yyfequal(ds_map_find_value(gmloc,"trait"),7)))&&(yyGetBool(gml_Script_s_is_offensive_player(__yy__v1227,_inst,gmlpmap)))){gmlxp_g=yyfplus(gmlxp_g,yyftime(__yy_gml_errCheck(gmlxp_lev),5));}else {if((yyGetBool(yyfequal(ds_map_find_value(gmldc,"trait"),7)))&&(yyGetBool(!yyGetBool(gml_Script_s_is_offensive_player(__yy__v1227,_inst,gmlpmap))))){gmlxp_g=yyfplus(gmlxp_g,yyftime(__yy_gml_errCheck(gmlxp_lev),
-5));};};var gmltrainingreg=yyInst(_inst,_other,97).gmltraining_reg_df;if(yyGetBool(gml_Script_s_is_offensive_player(__yy__v1227,_inst,gmlpmap))){gmltrainingreg=yyInst(_inst,_other,97).gmltraining_reg_of;};if(yyfequal(gmltrainingreg,1)){gmlxp_g=yyftime(gmlxp_g,0.6);}else {if(yyfequal(gmltrainingreg,3)){gmlxp_g=yyftime(gmlxp_g,1.5);};};gmlxp_g=yyftime(gmlxp_g,real(ds_map_find_value(gmlpmap,"xp_dev")));gmlxp_g=clamp(gmlxp_g,0,yyftime(__yy_gml_errCheck(gmlxp_lev),200));ds_map_set(gmlpmap,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,
+5));};};var gmltrainingreg=yyInst(_inst,_other,97).gmltraining_reg_df;if(yyGetBool(gml_Script_s_is_offensive_player(__yy__v1227,_inst,gmlpmap))){gmltrainingreg=yyInst(_inst,_other,97).gmltraining_reg_of;};if(yyfequal(gmltrainingreg,1)){gmlxp_g=yyftime(gmlxp_g,0.6);}else {if(yyfequal(gmltrainingreg,3)){gmlxp_g=yyftime(gmlxp_g,1.5);};};gmlxp_g=yyftime(gmlxp_g,rbDevXpMult(gmlpmap));gmlxp_g=clamp(gmlxp_g,0,yyftime(__yy_gml_errCheck(gmlxp_lev),200));ds_map_set(gmlpmap,"xp_gain",yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,
 "xp_gain")),__yy_gml_errCheck(round(gmlxp_g))));gmleffort=yyfplus(25,__yy_gml_errCheck(real(ds_map_find_value(gmlpmap,"age"))));gmleffort=yyfplus(gmleffort,clamp(round(yyftime(__yy_gml_errCheck(yyInst(_inst,_other,97).gmlweek),0.6)),2,10));gmleffort=yyfplus(gmleffort,gml_Script_s_get_match_rating(__yy__v1227,_inst,gmlpmap));if(yyfequal(ds_map_find_value(gmlpmap,"position"),10)){gmleffort=yyftime(gmleffort,0.5);};ds_map_set(gmlpmap,"condition",clamp(round(yyfminus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,
 "condition")),__yy_gml_errCheck(gmleffort))),1,100));if((yyGetBool(yyfequal(ds_map_find_value(gmlpmap,"position"),10)))&&(yyGetBool(yyfless(ds_map_find_value(gmlpmap,"stat_attempts"),1)))){continue;};if(!yyGetBool(gmlinjury_done)){gmlinjury_done=gml_Script_s_check_for_injury(__yy__v1227,_inst,gmlpmap);};}};if(!yyGetBool(gml_Script_s_simming_action(__yy__v1227,_inst))){{if(yyfgreaterequal(gmlqb_passing,200)){gml_Script_s_complete_achievement(__yy__v1227,_inst,"ACH_GAME_PASS_200");};if(yyfgreaterequal(gmlqb_passing,
 300)){gml_Script_s_complete_achievement(__yy__v1227,_inst,"ACH_GAME_PASS_300");};if(yyfgreaterequal(gmlqb_passing,400)){gml_Script_s_complete_achievement(__yy__v1227,_inst,"ACH_GAME_PASS_400");};if(yyfgreaterequal(gmlqb_passing,500)){gml_Script_s_complete_achievement(__yy__v1227,_inst,"ACH_GAME_PASS_500");};if(yyfgreaterequal(gmltotal_passing,200)){gml_Script_s_complete_achievement(__yy__v1227,_inst,"ACH_GAME_PASS_200");};if(yyfgreaterequal(gmltotal_passing,300)){gml_Script_s_complete_achievement(__yy__v1227,
@@ -6696,7 +7313,7 @@ ds_map_set(gmlpmap,"stamina",clamp(yyfplus(__yy_gml_errCheck(ds_map_find_value(g
 100);if(yyfequal(ds_map_find_value(gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,_other))){{gmlattitude=irandom_range(40,100);gmlcontract=2;};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gmlcontract=8;};};ds_map_set(gmlpmap,"attitude",gmlattitude);ds_map_set(gmlpmap,"contract",gmlcontract);ds_map_set(gmlpmap,"salary",gml_Script_s_get_new_salary(_inst,_other,gmlpmap));ds_map_set(gmlpmap,"creditcost",0);ds_map_set(gmlpmap,"xp",0);if(yyfgreater(ds_map_find_value(gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,
 _other))){ds_map_set(gmlpmap,"xp",irandom(99));};ds_map_set(gmlpmap,"xp_level",clamp(yyfminus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"age")),__yy_gml_errCheck(gml_Script_s_rookie_age_internal(_inst,_other))),1,9));ds_map_set(gmlpmap,"xp_gain",0);ds_map_set(gmlpmap,"skill_points",0);var gmlpot=yyftime(__yy_gml_errCheck(clamp(yyfminus(31,__yy_gml_errCheck(ds_map_find_value(gmlpmap,"age"))),0,10)),0.5);if((yyGetBool(yyfequal(ds_map_find_value(gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,
 _other))))&&(yyGetBool(irandom(1)))){gmlpot=6;};ds_map_set(gmlpmap,"max_skill",clamp(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"skill")),__yy_gml_errCheck(irandom(gmlpot))),1,gmlmax_skill));ds_map_set(gmlpmap,"max_speed",clamp(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"speed")),__yy_gml_errCheck(irandom(gmlpot))),1,gmlmax_speed));ds_map_set(gmlpmap,"max_strength",clamp(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"strength")),__yy_gml_errCheck(irandom(gmlpot))),1,gmlmax_strength));
-ds_map_set(gmlpmap,"max_stamina",clamp(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stamina")),__yy_gml_errCheck(irandom(gmlpot))),1,gmlmax_stamina));gml_Script_s_round_player_attributes(_inst,_other,gmlpmap);ds_map_set(gmlpmap,"condition",irandom_range(40,100));if(yyfequal(ds_map_find_value(gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,_other))){ds_map_set(gmlpmap,"condition",irandom_range(80,100));};ds_map_set(gmlpmap,"injury_week",0);ds_map_set(gmlpmap,"resting",0);ds_map_set(gmlpmap,
+ds_map_set(gmlpmap,"max_stamina",clamp(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"stamina")),__yy_gml_errCheck(irandom(gmlpot))),1,gmlmax_stamina));gml_Script_s_round_player_attributes(_inst,_other,gmlpmap);rbDevRoll(_inst,_other,gmlpmap);ds_map_set(gmlpmap,"condition",irandom_range(40,100));if(yyfequal(ds_map_find_value(gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,_other))){ds_map_set(gmlpmap,"condition",irandom_range(80,100));};ds_map_set(gmlpmap,"injury_week",0);ds_map_set(gmlpmap,"resting",0);ds_map_set(gmlpmap,
 "signed_year",0);ds_map_set(gmlpmap,"teamid",(-1));ds_map_set(gmlpmap,"outtrade_pick",0);ds_map_set(gmlpmap,"intrade_pick",0);ds_map_set(gmlpmap,"flash_time",0);ds_map_set(gmlpmap,"meetingdone",0);ds_map_set(gmlpmap,"scouted",0);ds_map_set(gmlpmap,"team_leave_reason","");ds_map_set(gmlpmap,"epilogue","");ds_map_set(gmlpmap,"drafted_pro_team","");ds_map_set(gmlpmap,"epilogue_story","");ds_map_set(gmlpmap,"stat_attempts",0);ds_map_set(gmlpmap,"stat_complete",0);ds_map_set(gmlpmap,"stat_yards",0);ds_map_set(gmlpmap,
 "stat_longest",0);ds_map_set(gmlpmap,"stat_touchdowns",0);ds_map_set(gmlpmap,"stat_fumbles",0);ds_map_set(gmlpmap,"stat_int",0);ds_map_set(gmlpmap,"stat_sacks",0);ds_map_set(gmlpmap,"stat_tackles",0);ds_map_set(gmlpmap,"stat_rush_attempts",0);ds_map_set(gmlpmap,"stat_rush_yards",0);ds_map_set(gmlpmap,"stat_rush_longest",0);ds_map_set(gmlpmap,"stat_rush_touchdowns",0);ds_map_set(gmlpmap,"stat_return_yards",0);ds_map_set(gmlpmap,"stat_return_longest",0);ds_map_set(gmlpmap,"stat_return_tds",0);ds_map_set(gmlpmap,
 "stat_return_attempts",0);ds_map_set(gmlpmap,"season_games",0);ds_map_set(gmlpmap,"season_attempts",0);ds_map_set(gmlpmap,"season_complete",0);ds_map_set(gmlpmap,"season_yards",0);ds_map_set(gmlpmap,"season_longest",0);ds_map_set(gmlpmap,"season_touchdowns",0);ds_map_set(gmlpmap,"season_fumbles",0);ds_map_set(gmlpmap,"season_int",0);ds_map_set(gmlpmap,"season_sacks",0);ds_map_set(gmlpmap,"season_tackles",0);ds_map_set(gmlpmap,"season_rush_attempts",0);ds_map_set(gmlpmap,"season_rush_yards",0);ds_map_set(gmlpmap,
@@ -7059,7 +7676,7 @@ for(var __yy__v1652 in __yy__v1651){if(!__yy__v1651.hasOwnProperty(__yy__v1652))
 "lname"))));argument0=string_replace_all(argument0,"$coachname_df",yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmldc,"fname"))," "),__yy_gml_errCheck(ds_map_find_value(gmldc,"lname"))));}}};return string_hash_to_newline(argument0);}}function gml_GlobalScript_s_parse_player_message(_inst,_other){(_inst.gmls_parse_player_message=__yy_method(_inst,gml_Script_s_parse_player_message));}function gml_Script_s_parse_player_message(_inst,_other,argument0,argument1){{var gmltid=ds_map_find_value(argument1,
 "teamid");if(yyfless(gmltid,0)){gmltid=yyInst(_inst,_other,97).gmlmyteam_id;};gml_Script_slog(_inst,_other,yyfplus("Parse player. Team id = ",__yy_gml_errCheck(string(gmltid))));argument0=string_replace_all(argument0,"$teamname",gml_Script_s_get_team_name_by_id(_inst,_other,gmltid));argument0=string_replace_all(argument0,"$position",gml_Script_s_get_string_position_full(_inst,_other,ds_map_find_value(argument1,"position")));argument0=string_replace_all(argument0,"$pos",gml_Script_s_get_string_position(_inst,
 _other,ds_map_find_value(argument1,"position")));argument0=string_replace_all(argument0,"$playername",yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(argument1,"fname"))," "),__yy_gml_errCheck(ds_map_find_value(argument1,"lname"))));argument0=string_replace_all(argument0,"$playerlastname",ds_map_find_value(argument1,"lname"));argument0=string_replace_all(argument0,"$hirename",yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(argument1,"fname"))," "),__yy_gml_errCheck(ds_map_find_value(argument1,
-"lname"))));argument0=string_replace_all(argument0,"$age",ds_map_find_value(argument1,"age"));argument0=string_replace_all(argument0,"$contract",ds_map_find_value(argument1,"contract"));argument0=string_replace_all(argument0,"$salary",yyfplus(yyfplus("$",__yy_gml_errCheck(string(ds_map_find_value(argument1,"salary")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Million"))));argument0=string_replace_all(argument0,"$uniform",string_lower(gml_Script_s_str(_inst,_other,yyfplus("uniformviolation_",
+"lname"))));argument0=string_replace_all(argument0,"$age",ds_map_find_value(argument1,"age"));argument0=string_replace_all(argument0,"$contract",ds_map_find_value(argument1,"contract"));argument0=string_replace_all(argument0,"$salary",yyfplus(yyfplus("$",__yy_gml_errCheck(rbFmtM(ds_map_find_value(argument1,"salary")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Million"))));argument0=string_replace_all(argument0,"$uniform",string_lower(gml_Script_s_str(_inst,_other,yyfplus("uniformviolation_",
 __yy_gml_errCheck(string(irandom(9)))))));if(yyfequal(ds_map_find_value(argument1,"position"),10)){argument0=string_replace_all(argument0,"$injurytype",string_lower(gml_Script_s_str(_inst,_other,yyfplus("injurytype_",__yy_gml_errCheck(string(irandom_range(6,11)))))));}else {argument0=string_replace_all(argument0,"$injurytype",string_lower(gml_Script_s_str(_inst,_other,yyfplus("injurytype_",__yy_gml_errCheck(string(irandom(11)))))));};argument0=string_replace_all(argument0,"$randomfname_female",gml_Script_s_get_random_first_name(_inst,
 _other,false));argument0=string_replace_all(argument0,"$randomcharity",gml_Script_s_get_random_charity(_inst,_other));argument0=string_replace_all(argument0,"$randomteamname",gml_Script_s_get_random_teamname(_inst,_other,false));var gmlsmap=gml_Script_s_get_staff(_inst,_other,101);if(yyGetBool(gml_Script_s_is_offensive_player(_inst,_other,argument1))){gmlsmap=gml_Script_s_get_staff(_inst,_other,102);};if(yyGetBool(gmlsmap)){argument0=string_replace(argument0,"$coachposition",gml_Script_s_get_string_position_full(_inst,
 _other,ds_map_find_value(gmlsmap,"position")));};argument0=string_replace_all(argument0,"$myteamname",gml_Script_s_get_team_name_by_id(_inst,_other,yyInst(_inst,_other,97).gmlmyteam_id));if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){{var gmlqb_map=gml_Script_s_get_qb_pmap(_inst,_other);if(yyGetBool(gmlqb_map)){{argument0=string_replace_all(argument0,"$mylastname",ds_map_find_value(gmlqb_map,"lname"));argument0=string_replace_all(argument0,"$myname",yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(gmlqb_map,
@@ -7326,9 +7943,9 @@ _other,gmlipoint).gmlintercept=false;};};};return gmlipoint;}}function gml_Globa
 2926361285);gmlnames[__yy_gml_array_check_index_set((g_yyPrePostObject__=gmlnum,gmlnum=(g_yyPrePostObject__ instanceof Long?gmlnum.add(1):++gmlnum),g_yyPrePostObject__))]=gmln;}};file_text_close(gmlfile);return gmlnames[__yy_gml_array_check_index(irandom(yyfminus(__yy_gml_errCheck(gmlnum),1)),gmlnames)];}}function gml_GlobalScript_s_get_random_charity(_inst,_other){(_inst.gmls_get_random_charity=__yy_method(_inst,gml_Script_s_get_random_charity));}function gml_Script_s_get_random_charity(_inst,_other){
 {var gmlfile=file_text_open_read("Charities.txt");var gmlnames;var gmlnum=0;while(!yyGetBool(file_text_eof(gmlfile))){{file_text_readln(gmlfile);var gmln=file_text_read_string(gmlfile);gmlnames=__yy_gml_array_check(gmlnames,2926361285);gmlnames[__yy_gml_array_check_index_set((g_yyPrePostObject__=gmlnum,gmlnum=(g_yyPrePostObject__ instanceof Long?gmlnum.add(1):++gmlnum),g_yyPrePostObject__))]=gmln;}};file_text_close(gmlfile);return gmlnames[__yy_gml_array_check_index(irandom(yyfminus(__yy_gml_errCheck(gmlnum),
 1)),gmlnames)];}}function gml_GlobalScript_s_get_aim_direction(_inst,_other,argument0,argument1,argument2,argument3){(_inst.gmls_get_aim_direction=__yy_method(_inst,gml_Script_s_get_aim_direction));}function gml_Script_s_get_aim_direction(_inst,_other,argument0,argument1,argument2,argument3){{_inst.gmldir=arctan2(yyfminus(__yy_gml_errCheck(argument3),__yy_gml_errCheck(argument1)),yyfminus(__yy_gml_errCheck(argument2),__yy_gml_errCheck(argument0)));return _inst.gmldir;}}function gml_GlobalScript_s_get_random_first_name(_inst,
-_other){(_inst.gmls_get_random_first_name=__yy_method(_inst,gml_Script_s_get_random_first_name));}function gml_Script_s_get_random_first_name(_inst,_other,argument0){{var gmlf="Names_F1.txt";if(!yyGetBool(argument0)){gmlf="Names_F0.txt";};var gmlfile=file_text_open_read(gmlf);var gmlnames;var gmlnum=0;while(!yyGetBool(file_text_eof(gmlfile))){{file_text_readln(gmlfile);var gmln=file_text_read_string(gmlfile);if(yyfless(string_length(gmln),8)){gmlnames=__yy_gml_array_check(gmlnames,2926361285);gmlnames[__yy_gml_array_check_index_set((g_yyPrePostObject__=gmlnum,
+_other){(_inst.gmls_get_random_first_name=__yy_method(_inst,gml_Script_s_get_random_first_name));}function gml_Script_s_get_random_first_name(_inst,_other,argument0){{var gmlf="Names_F1.txt";if(!yyGetBool(argument0)){gmlf="Names_F0.txt";};var gmlfile=file_text_open_read(gmlf);var gmlnames;var gmlnum=0;while(!yyGetBool(file_text_eof(gmlfile))){{file_text_readln(gmlfile);var gmln=file_text_read_string(gmlfile);if(yyfless(string_length(gmln),17)){gmlnames=__yy_gml_array_check(gmlnames,2926361285);gmlnames[__yy_gml_array_check_index_set((g_yyPrePostObject__=gmlnum,
 gmlnum=(g_yyPrePostObject__ instanceof Long?gmlnum.add(1):++gmlnum),g_yyPrePostObject__))]=gmln;};}};file_text_close(gmlfile);return gmlnames[__yy_gml_array_check_index(irandom(yyfminus(__yy_gml_errCheck(gmlnum),1)),gmlnames)];}}function gml_GlobalScript_s_get_random_last_name(_inst,_other){(_inst.gmls_get_random_last_name=__yy_method(_inst,gml_Script_s_get_random_last_name));}function gml_Script_s_get_random_last_name(_inst,_other){{var gmlfile=file_text_open_read("Names_L.txt");var gmlnames;var gmlnum=0;
-while(!yyGetBool(file_text_eof(gmlfile))){{file_text_readln(gmlfile);var gmln=file_text_read_string(gmlfile);if(yyfless(string_length(gmln),8)){gmlnames=__yy_gml_array_check(gmlnames,2926361285);gmlnames[__yy_gml_array_check_index_set((g_yyPrePostObject__=gmlnum,gmlnum=(g_yyPrePostObject__ instanceof Long?gmlnum.add(1):++gmlnum),g_yyPrePostObject__))]=gmln;};}};file_text_close(gmlfile);return gmlnames[__yy_gml_array_check_index(irandom(yyfminus(__yy_gml_errCheck(gmlnum),1)),gmlnames)];}}function gml_GlobalScript_s_format_hex_color(_inst,
+while(!yyGetBool(file_text_eof(gmlfile))){{file_text_readln(gmlfile);var gmln=file_text_read_string(gmlfile);if(yyfless(string_length(gmln),17)){gmlnames=__yy_gml_array_check(gmlnames,2926361285);gmlnames[__yy_gml_array_check_index_set((g_yyPrePostObject__=gmlnum,gmlnum=(g_yyPrePostObject__ instanceof Long?gmlnum.add(1):++gmlnum),g_yyPrePostObject__))]=gmln;};}};file_text_close(gmlfile);return gmlnames[__yy_gml_array_check_index(irandom(yyfminus(__yy_gml_errCheck(gmlnum),1)),gmlnames)];}}function gml_GlobalScript_s_format_hex_color(_inst,
 _other,argument0){(_inst.gmls_format_hex_color=__yy_method(_inst,gml_Script_s_format_hex_color));}function gml_Script_s_format_hex_color(_inst,_other,argument0){{gml_Script_slog(_inst,_other,"s_format_hex_color");var gmlcol=argument0;gmlcol=string_lettersdigits(gmlcol);gmlcol=string_upper(gmlcol);gmlcol=string_replace_all(gmlcol,"G","0");gmlcol=string_replace_all(gmlcol,"H","0");gmlcol=string_replace_all(gmlcol,"I","0");gmlcol=string_replace_all(gmlcol,"J","0");gmlcol=string_replace_all(gmlcol,"K",
 "0");gmlcol=string_replace_all(gmlcol,"L","0");gmlcol=string_replace_all(gmlcol,"M","0");gmlcol=string_replace_all(gmlcol,"N","0");gmlcol=string_replace_all(gmlcol,"O","0");gmlcol=string_replace_all(gmlcol,"P","0");gmlcol=string_replace_all(gmlcol,"Q","0");gmlcol=string_replace_all(gmlcol,"R","0");gmlcol=string_replace_all(gmlcol,"S","0");gmlcol=string_replace_all(gmlcol,"T","0");gmlcol=string_replace_all(gmlcol,"U","0");gmlcol=string_replace_all(gmlcol,"V","0");gmlcol=string_replace_all(gmlcol,
 "W","0");gmlcol=string_replace_all(gmlcol,"X","0");gmlcol=string_replace_all(gmlcol,"Y","0");gmlcol=string_replace_all(gmlcol,"Z","0");while(yyfless(string_length(gmlcol),6)){gmlcol=yyfplus(__yy_gml_errCheck(gmlcol),"0")};if(yyfequal(gmlcol,"FF0000")){gmlcol="FA0000";};if(yyfequal(gmlcol,"00FF00")){gmlcol="00FA00";};if(yyfequal(gmlcol,"0000FF")){gmlcol="0000FA";};if(yyfequal(gmlcol,"FF00FF")){gmlcol="FA00FA";};if(yyfequal(gmlcol,"FFFF00")){gmlcol="FAFA00";};if(yyfequal(gmlcol,"800000")){gmlcol="850000";
@@ -7880,7 +8497,7 @@ gmlcy,yyfplus(__yy_gml_errCheck(gmlcx),__yy_gml_errCheck(gmlcw)),yyfplus(__yy_gm
 0);};};}else {if(yyflessequal(gmlcon,40)){{draw_set_color(65535);draw_rectangle(yyfplus(__yy_gml_errCheck(gmlcx),2),yyfplus(__yy_gml_errCheck(gmlcy),2),yyfplus(yyfplus(__yy_gml_errCheck(gmlcx),2),__yy_gml_errCheck(gmlprc)),yyfplus(__yy_gml_errCheck(gmlcy),__yy_gml_errCheck(gmlch)),0);};}else {{draw_set_color(65280);draw_rectangle(yyfplus(__yy_gml_errCheck(gmlcx),2),yyfplus(__yy_gml_errCheck(gmlcy),2),yyfplus(yyfplus(__yy_gml_errCheck(gmlcx),2),__yy_gml_errCheck(gmlprc)),yyfplus(__yy_gml_errCheck(gmlcy),
 __yy_gml_errCheck(gmlch)),0);};};};};draw_set_color(16777215);};}else {{if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{if(yyfequal(ds_list_find_index(yyInst(_inst,_other,97).gmlroster,_inst.gmlpmap),(-1))){{var gmlrc_str=string(ds_map_find_value(_inst.gmlpmap,"rc_cost"));var gmlrc_str_w=gml_Script_string_hd_width(_inst,_other,gmlrc_str);if((yyGetBool(yyfequal(ds_list_find_index(yyInst(_inst,_other,97).gmlroster,_inst.gmlpmap),(-1))))&&(yyGetBool(yyfgreater(ds_map_find_value(_inst.gmlpmap,"rc_cost"),
 yyInst(_inst,_other,97).gmlrecruitment_credits)))){draw_set_color(255);};gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,gmlrc_str);draw_sprite(_inst,0,0,yyfminus(yyfminus(__yy_gml_errCheck(gmltx),6),__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(sprite_get_width(0)),__yy_gml_errCheck(gmlrc_str_w))),2))),gmlty);};};};}else {{if((yyGetBool(yyfequal(ds_list_find_index(yyInst(_inst,_other,97).gmlroster,_inst.gmlpmap),(-1))))&&(yyGetBool(yyfgreater(ds_map_find_value(_inst.gmlpmap,
-"salary"),gml_Script_s_get_salary_cap_space(_inst,_other))))){draw_set_color(255);};gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,yyfplus(yyfplus("$",__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"salary")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Million"))));};};draw_set_color(16777215);};};};};};var gmlnum_roty=0;var gmlnum_mvp=0;var gmlnum_opoy=0;var gmlnum_dpoy=0;var gmlnum_rings=0;var gmlnum_rbmvp=0;var gmllim=5;if(yyGetBool(gml_Script_s_is_staff(_inst,_other,gmlpos))){
+"salary"),gml_Script_s_get_salary_cap_space(_inst,_other))))){draw_set_color(255);};gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,yyfplus(yyfplus("$",__yy_gml_errCheck(rbFmtM(ds_map_find_value(_inst.gmlpmap,"salary")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Million"))));};};draw_set_color(16777215);};};};};};var gmlnum_roty=0;var gmlnum_mvp=0;var gmlnum_opoy=0;var gmlnum_dpoy=0;var gmlnum_rings=0;var gmlnum_rbmvp=0;var gmllim=5;if(yyGetBool(gml_Script_s_is_staff(_inst,_other,gmlpos))){
 gmllim=10;};if(yyGetBool(ds_map_exists(_inst.gmlpmap,"roty"))){gmlnum_roty=min(real(ds_map_find_value(_inst.gmlpmap,"roty")),1);};if(yyGetBool(ds_map_exists(_inst.gmlpmap,"mvp"))){gmlnum_mvp=min(real(ds_map_find_value(_inst.gmlpmap,"mvp")),gmllim);};if(yyGetBool(ds_map_exists(_inst.gmlpmap,"opoy"))){gmlnum_opoy=min(real(ds_map_find_value(_inst.gmlpmap,"opoy")),1);};if(yyGetBool(ds_map_exists(_inst.gmlpmap,"dpoy"))){gmlnum_dpoy=min(real(ds_map_find_value(_inst.gmlpmap,"dpoy")),gmllim);};if(yyGetBool(ds_map_exists(_inst.gmlpmap,
 "rings"))){gmlnum_rings=min(real(ds_map_find_value(_inst.gmlpmap,"rings")),gmllim);};if(yyGetBool(ds_map_exists(_inst.gmlpmap,"rbmvp"))){gmlnum_rbmvp=min(real(ds_map_find_value(_inst.gmlpmap,"rbmvp")),1);};if(yyfequal(gmlpos,100)){{gmlnum_rings=min(gml_Script_s_count_achievement(_inst,_other,"ACH_WIN_RETROBOWL1"),gmllim);};};var gmlmx=yyfplus(__yy_gml_errCheck(gmlbx),3);var gmlmy=yyfplus(__yy_gml_errCheck(gmlby),26);if(yyGetBool(gmlnum_roty)){{draw_sprite_ext(_inst,189,0,gmlmx,gmlmy,1,1,0,16777215,
 1);gmlmx=yyfplus(gmlmx,8);};};var gmli=0;for(;yyfless(gmli,gmlnum_mvp);(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{draw_sprite_ext(_inst,189,1,gmlmx,gmlmy,1,1,0,16777215,1);gmlmx=yyfplus(gmlmx,2);}};if(yyfgreater(gmlnum_mvp,0)){gmlmx=yyfplus(gmlmx,6);};var gmli=0;for(;yyfless(gmli,gmlnum_opoy);(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{draw_sprite_ext(_inst,189,2,gmlmx,
@@ -8112,7 +8729,7 @@ _other,_inst.gmltitle)),2)));gmltx=yyfplus(gmltx,yyfdivide(__yy_gml_errCheck(_in
 _other,gmltx,gmlty,string_upper(_inst.gmltitle));draw_set_halign(2);gmltx=yyfminus(yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck(_inst.sprite_width)),8);gmlty=yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(_inst.sprite_height),2)));var gmlbw=yyfminus(__yy_gml_errCheck(_inst.sprite_width),16);var gmlprc=yyftime(__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlbw),4)),100)),__yy_gml_errCheck(_inst.gmlpercent));gmlprc=clamp(gmlprc,1,
 gmlbw);draw_rectangle_color(yyfplus(__yy_gml_errCheck(_inst.x),8),yyfplus(__yy_gml_errCheck(_inst.y),8),yyfplus(yyfplus(__yy_gml_errCheck(_inst.x),8),__yy_gml_errCheck(gmlbw)),yyfplus(__yy_gml_errCheck(_inst.y),24),global.gmlc_backfill,global.gmlc_backfill,global.gmlc_backfill,global.gmlc_backfill,0);draw_rectangle_color(yyfplus(__yy_gml_errCheck(_inst.x),10),yyfplus(__yy_gml_errCheck(_inst.y),10),yyfplus(yyfplus(__yy_gml_errCheck(_inst.x),10),__yy_gml_errCheck(gmlprc)),yyfplus(__yy_gml_errCheck(_inst.y),
 22),global.gmlc_primary,global.gmlc_primary,global.gmlc_primary,global.gmlc_primary,0);}function gml_Object_obj_xp_player_PreCreate_0(_inst,_other){event_inherited(_inst,_other);_inst.gmltitle="Title";_inst.gmlpercent=0;}function gml_Object_obj_salarycap_Create_0(_inst,_other){_inst.gmlcreation_time=g_pBuiltIn.get_current_time();if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{_inst.gmltitle=gml_Script_s_str(_inst,_other,"ui_Recruitment_Credits");};}else {{_inst.gmlcurrent_salary=gml_Script_s_get_salary_total(_inst,
-_other);_inst.gmlmax_salary=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,97).gmlsalary_cap),__yy_gml_errCheck(yyInst(_inst,_other,97).gmlboost_salary_cap));_inst.gmlpercent=yyftime(__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(_inst.gmlcurrent_salary),__yy_gml_errCheck(_inst.gmlmax_salary))),100);_inst.gmltitle=yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_SalaryCap"))," "),__yy_gml_errCheck(string(_inst.gmlcurrent_salary))),"m / "),__yy_gml_errCheck(string(_inst.gmlmax_salary))),
+_other);_inst.gmlmax_salary=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,97).gmlsalary_cap),__yy_gml_errCheck(yyInst(_inst,_other,97).gmlboost_salary_cap));_inst.gmlpercent=yyftime(__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(_inst.gmlcurrent_salary),__yy_gml_errCheck(_inst.gmlmax_salary))),100);_inst.gmltitle=yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_SalaryCap"))," "),__yy_gml_errCheck(rbFmtM(_inst.gmlcurrent_salary))),"m / "),__yy_gml_errCheck(rbFmtM(_inst.gmlmax_salary))),
 "m");if(yyfgreater(_inst.gmlpercent,100)){_inst.gmlpercent=100;}else {_inst.gmlcolour=global.gmlc_primary;};};};}function gml_Object_obj_salarycap_Draw_0(_inst,_other){}function gml_Object_obj_salarycap_Draw_64(_inst,_other){draw_self(_inst);draw_set_font(global.gmlfnt_small_flex);draw_set_halign(1);var gmltx=_inst.x;var gmlty=_inst.y;var gmlsw=yyfplus(2,__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(gml_Script_string_hd_width(_inst,_other,_inst.gmltitle)),2)));var gmlsh=yyfplus(1,__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(gml_Script_string_hd_height(_inst,
 _other,_inst.gmltitle)),2)));gmltx=yyfplus(gmltx,yyfdivide(__yy_gml_errCheck(_inst.sprite_width),2));draw_rectangle_color(yyfminus(yyfminus(__yy_gml_errCheck(gmltx),__yy_gml_errCheck(gmlsw)),2),yyfminus(__yy_gml_errCheck(gmlty),__yy_gml_errCheck(gmlsh)),yyfplus(__yy_gml_errCheck(gmltx),__yy_gml_errCheck(gmlsw)),yyfplus(__yy_gml_errCheck(gmlty),__yy_gml_errCheck(gmlsh)),global.gmlc_background,global.gmlc_background,global.gmlc_background,global.gmlc_background,0);gml_Script_draw_hd_text(_inst,_other,
 gmltx,gmlty,string_upper(_inst.gmltitle));if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gmltx=yyfplus(__yy_gml_errCheck(_inst.x),8);gmlty=yyfplus(gmlty,16);gml_Script_draw_custom_recruitment_credits_display(_inst,_other,gmltx,gmlty);};}else {{var gmlbw=yyfminus(__yy_gml_errCheck(_inst.sprite_width),16);var gmlprc=yyftime(__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlbw),4)),100)),__yy_gml_errCheck(_inst.gmlpercent));gmlprc=clamp(gmlprc,1,gmlbw);draw_rectangle_color(yyfplus(__yy_gml_errCheck(_inst.x),
@@ -8763,7 +9380,7 @@ _inst.gmly_rookie=yyInst(_inst,_other,100443).y;if((yyGetBool(yyfgreater(ds_map_
 _inst.gmlx_condition=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100436).x),__yy_gml_errCheck(gml_Script_string_hd_width(_inst,_other,yyInst(_inst,_other,100436).gmltext)));_inst.gmly_condition=yyInst(_inst,_other,100436).y;_inst.gmltxt_condition=string_upper(gml_Script_s_get_string_condition(_inst,_other,ds_map_find_value(_inst.gmlpmap,"condition")));_inst.gmlshow_spr_condition=true;if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){{_inst.gmltxt_condition=yyfplus(__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,
 "condition"))),"%");if(yyGetBool(gml_Script_s_qb_mode_benched_status(_inst,_other))){_inst.gmltxt_condition=yyfplus(_inst.gmltxt_condition,yyfplus(" ",__yy_gml_errCheck(string_upper(gml_Script_s_str(_inst,_other,"ui_Benched")))));};};};if((yyGetBool(_inst.gmlis_draft_player))&&(yyGetBool(!yyGetBool(ds_map_find_value(_inst.gmlpmap,"scouted"))))){_inst.gmltxt_condition="?";};_inst.gmlcol_condition=16777215;_inst.gmli_condition=(-1);if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){{_inst.gmli_condition=gml_Script_s_get_condition_icon(_inst,
 _other,_inst.gmlpmap);_inst.gmlcol_condition=gml_Script_s_get_condition_colour(_inst,_other,ds_map_find_value(_inst.gmlpmap,"condition"),65280);};}else {{if(yyGetBool(ds_map_find_value(_inst.gmlpmap,"resting"))){{_inst.gmlcol_condition=global.gmlc_primary;_inst.gmli_condition=3;};}else {if(yyflessequal(ds_map_find_value(_inst.gmlpmap,"condition"),0)){{_inst.gmlcol_condition=255;_inst.gmli_condition=0;};}else {if(yyflessequal(ds_map_find_value(_inst.gmlpmap,"condition"),20)){{_inst.gmlcol_condition=4235519;
-_inst.gmli_condition=1;};}else {if(yyflessequal(ds_map_find_value(_inst.gmlpmap,"condition"),40)){{_inst.gmlcol_condition=65535;_inst.gmli_condition=2;};};};};};};};_inst.gmlcond_scale=1;if((yyflessequal(ds_map_find_value(_inst.gmlpmap,"condition"),(-1)))&&(typeof ds_map_find_value(_inst.gmlpmap,"injury_name")==="string")&&(!yyGetBool(yyInst(_inst,_other,97).gmlqb_mode))&&(_inst.gmltxt_condition!=="?")){_inst.gmltxt_condition=ds_map_find_value(_inst.gmlpmap,"injury_name").replace(/^(a|an) /,"").toUpperCase()+" ("+abs(ds_map_find_value(_inst.gmlpmap,"condition"))+")";var gmlcmax=gml_Script_string_hd_width(_inst,_other,"INJURED (5)")*1.2;var gmlcw=gml_Script_string_hd_width(_inst,_other,_inst.gmltxt_condition);if(gmlcw>gmlcmax){_inst.gmlcond_scale=Math.max(0.4,gmlcmax/gmlcw);};};_inst.gmlx_condition2=yyfplus(_inst.gmlx_condition,yyftime(gml_Script_string_hd_width(_inst,_other,yyfplus(_inst.gmltxt_condition,"  ")),_inst.gmlcond_scale));var gmlcontract=yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Contract")),": $"),__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,
+_inst.gmli_condition=1;};}else {if(yyflessequal(ds_map_find_value(_inst.gmlpmap,"condition"),40)){{_inst.gmlcol_condition=65535;_inst.gmli_condition=2;};};};};};};};_inst.gmlcond_scale=1;if((yyflessequal(ds_map_find_value(_inst.gmlpmap,"condition"),(-1)))&&(typeof ds_map_find_value(_inst.gmlpmap,"injury_name")==="string")&&(!yyGetBool(yyInst(_inst,_other,97).gmlqb_mode))&&(_inst.gmltxt_condition!=="?")){_inst.gmltxt_condition=ds_map_find_value(_inst.gmlpmap,"injury_name").replace(/^(a|an) /,"").toUpperCase()+" ("+abs(ds_map_find_value(_inst.gmlpmap,"condition"))+")";var gmlcmax=gml_Script_string_hd_width(_inst,_other,"INJURED (5)")*1.2;var gmlcw=gml_Script_string_hd_width(_inst,_other,_inst.gmltxt_condition);if(gmlcw>gmlcmax){_inst.gmlcond_scale=Math.max(0.4,gmlcmax/gmlcw);};};_inst.gmlx_condition2=yyfplus(_inst.gmlx_condition,yyftime(gml_Script_string_hd_width(_inst,_other,yyfplus(_inst.gmltxt_condition,"  ")),_inst.gmlcond_scale));var gmlcontract=yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Contract")),": $"),__yy_gml_errCheck(rbFmtM(ds_map_find_value(_inst.gmlpmap,
 "salary")))),"m ("),__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"contract")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Year"))),")");if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){gmlcontract=yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Contract")),": "),__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"contract")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Year")));};yyInst(_inst,_other,100435).gmltext=gmlcontract;yyInst(_inst,
 _other,100441).gmltext=string_upper(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Attitude")),": "),__yy_gml_errCheck(gml_Script_s_get_string_attitude(_inst,_other,ds_map_find_value(_inst.gmlpmap,"attitude")))));if((yyGetBool(_inst.gmlis_draft_player))&&(yyGetBool(yyfequal(ds_map_find_value(_inst.gmlpmap,"scouted"),0)))){yyInst(_inst,_other,100441).gmltext=string_upper(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Attitude")),": ?"));};_inst.gmlx_attitude=yyfplus(__yy_gml_errCheck(yyInst(_inst,
 _other,100441).x),__yy_gml_errCheck(gml_Script_string_hd_width(_inst,_other,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100441).gmltext),"  "))));_inst.gmly_attitude=yyInst(_inst,_other,100441).y;_inst.gmlshow_spr_attitude=true;yyInst(_inst,_other,100442).gmltext=gml_Script_s_str(_inst,_other,"ui_Rating");var gmlsw=yyfplus(__yy_gml_errCheck(gml_Script_string_hd_width(_inst,_other,yyInst(_inst,_other,100442).gmltext)),8);_inst.gmlx_star_rating=yyInst(_inst,_other,100442).x;_inst.gmly_star_rating=yyfplus(__yy_gml_errCheck(yyInst(_inst,
@@ -8801,14 +9418,14 @@ _other,"ui_Bench");yyInst(_inst,_other,100428).gmlcolour=global.gmlc_background;
 };};};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{var gmlviewOnly=false;if(yyGetBool(gml_Script_s_doing_college_draft(_inst,_other))){{gmlviewOnly=true;};};if((yyGetBool(yyfequal(yyInst(_inst,_other,97).gmlprofile_back_to,1)))||(yyGetBool(yyfequal(yyInst(_inst,_other,97).gmlprofile_back_to,2)))){{gmlviewOnly=true;};};if(yyGetBool(gmlviewOnly)){{yyInst(_inst,_other,100429).visible=false;yyInst(_inst,_other,100428).visible=false;yyInst(_inst,_other,100403).visible=false;yyInst(_inst,_other,
 100402).visible=false;yyInst(_inst,_other,100426).visible=false;yyInst(_inst,_other,100425).visible=false;};};if(yyfgreater(yyInst(_inst,_other,97).gmlcollege_admissions_draft_round,0)){{if(yyfequal(ds_map_find_value(_inst.gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,_other))){{yyInst(_inst,_other,100425).visible=false;};}else {{yyInst(_inst,_other,100425).visible=true;};};};};yyInst(_inst,_other,100425).gmlonClickAction=kgml_Script_btn_click_Profile_College_Cut;yyInst(_inst,_other,100425).gmltext=gml_Script_s_str(_inst,
 _other,"ui_Cut");if(yyfgreater(yyInst(_inst,_other,97).gmlcollege_admissions_draft_round,0)){{yyInst(_inst,_other,100425).gmlonClickAction=kgml_Script_btn_click_Profile_College_Cut_During_Admission_Draft;yyInst(_inst,_other,100425).gmltext=gml_Script_s_str(_inst,_other,"ui_AdmissCutForRC");};};};};gml_Script_s_position_edit_name_btn(_inst,_other);if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gml_Script_rm_player_profile_college_create(_inst,_other);};};if(yyGetBool(yyInst(_inst,_other,97).gmlqb_mode)){
-gml_Script_s_player_profile_qb_mode(_inst,_other);};gml_Script_s_find_default_button(_inst,_other,true);if(yyGetBool(global.gmlexhibition)){{gml_Script_rm_player_profile_exhibition_create(_inst,_other);};};}function gml_Object_obj_playerprofile_rm_Step_0(_inst,_other){rbGameLogSync(_inst,_other);yyInst(_inst,_other,100451).gmltext=gml_Script_s_get_credit(_inst,_other);if(!yyGetBool(ds_exists(_inst.gmlpmap,1))){return;};if(yyGetBool(is_undefined(ds_map_find_value(_inst.gmlpmap,"xp_gain")))){return;};draw_set_font(global.gmlfnt_small_flex);
+gml_Script_s_player_profile_qb_mode(_inst,_other);};gml_Script_s_find_default_button(_inst,_other,true);if(yyGetBool(global.gmlexhibition)){{gml_Script_rm_player_profile_exhibition_create(_inst,_other);};};}function gml_Object_obj_playerprofile_rm_Step_0(_inst,_other){rbGameLogSync(_inst,_other);rbDevTraitSync(_inst,_other);yyInst(_inst,_other,100451).gmltext=gml_Script_s_get_credit(_inst,_other);if(!yyGetBool(ds_exists(_inst.gmlpmap,1))){return;};if(yyGetBool(is_undefined(ds_map_find_value(_inst.gmlpmap,"xp_gain")))){return;};draw_set_font(global.gmlfnt_small_flex);
 draw_set_halign(0);draw_set_valign(1);yyInst(_inst,_other,100441).gmltext=string_upper(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Attitude")),": "),__yy_gml_errCheck(gml_Script_s_get_string_attitude(_inst,_other,ds_map_find_value(_inst.gmlpmap,"attitude")))));_inst.gmlx_attitude=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100441).x),__yy_gml_errCheck(gml_Script_string_hd_width(_inst,_other,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100441).gmltext),"  "))));_inst.gmly_attitude=yyInst(_inst,
 _other,100441).y;if((yyGetBool(_inst.gmlis_draft_player))&&(yyGetBool(yyfequal(ds_map_find_value(_inst.gmlpmap,"scouted"),0)))){{yyInst(_inst,_other,100441).gmltext=string_upper(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Attitude")),": ?"));_inst.gmly_attitude=(-99999);};};if(yyfgreater(real(ds_map_find_value(_inst.gmlpmap,"xp_gain")),0)){{ds_map_set(_inst.gmlpmap,"xp_gain",yyfminus(__yy_gml_errCheck(real(ds_map_find_value(_inst.gmlpmap,"xp_gain"))),1));ds_map_set(_inst.gmlpmap,
 "xp",yyfplus(__yy_gml_errCheck(real(ds_map_find_value(_inst.gmlpmap,"xp"))),1));if(yyfgreaterequal(ds_map_find_value(_inst.gmlpmap,"xp"),_inst.gmltarget)){{ds_map_set(_inst.gmlpmap,"xp",1);ds_map_set(_inst.gmlpmap,"xp_level",yyfplus(__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"xp_level")),1));ds_map_set(_inst.gmlpmap,"attitude",clamp(yyfplus(__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"attitude")),10),1,100));if(yyfless(ds_map_find_value(_inst.gmlpmap,"xp_gain"),1)){ds_map_set(_inst.gmlpmap,
 "xp_gain",1);};if(!yyGetBool(gml_Script_s_player_at_max_potential(_inst,_other,_inst.gmlpmap))){{ds_map_set(_inst.gmlpmap,"skill_points",yyfplus(__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"skill_points")),1));room_goto(22);};}else {{var gmlcx=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100446).x),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(yyInst(_inst,_other,100446).sprite_width),0.9)));var gmlcy=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,100446).y),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(yyInst(_inst,
 _other,100446).sprite_height),0.5)));gml_Script_s_create_credit(_inst,_other,gmlcx,gmlcy,yyInst(_inst,_other,100451).x,yyInst(_inst,_other,100451).y,1,1,(-4),true);gml_Script_s_find_default_button(_inst,_other,true);};};return;};};_inst.gmlprc=yyftime(__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"xp")),__yy_gml_errCheck(_inst.gmltarget))),100);yyInst(_inst,_other,100446).gmltitle=yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_XPLevel"))," "),
 __yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"xp_level"))));yyInst(_inst,_other,100446).gmlpercent=_inst.gmlprc;if(yyfless(ds_map_find_value(_inst.gmlpmap,"xp_gain"),1)){{ds_map_set(_inst.gmlpmap,"xp_gain",0);if(yyfgreater(ds_map_find_value(_inst.gmlpmap,"skill_points"),0)){{room_goto(22);return;};};layer_set_visible(_inst.gmllayer_back,false);layer_set_visible(_inst.gmllayer_main,false);layer_set_visible(_inst.gmllayer_pick,false);layer_set_visible(_inst.gmllayer_xp,false);layer_set_visible(_inst.gmllayer_xp_cont,
-true);};};};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gml_Script_rm_player_profile_college_step(_inst,_other);};};}function gml_Object_obj_playerprofile_rm_Draw_64(_inst,_other){if(!yyGetBool(ds_exists(_inst.gmlpmap,1))){return;};draw_set_font(global.gmlfnt_small_flex);draw_set_halign(0);draw_set_valign(1);var gmlcol=(yyfequal(global.gmlc_primary,0)?16777215:global.gmlc_primary);if(yyGetBool(_inst.gmlshow_spr_star_rating_cb)){draw_sprite_ext(_inst,118,_inst.gmlstar_rating,_inst.gmlx_star_rating,
+true);};};};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gml_Script_rm_player_profile_college_step(_inst,_other);};};}function gml_Object_obj_playerprofile_rm_Draw_64(_inst,_other){rbDevProfileDraw(_inst,_other);if(!yyGetBool(ds_exists(_inst.gmlpmap,1))){return;};draw_set_font(global.gmlfnt_small_flex);draw_set_halign(0);draw_set_valign(1);var gmlcol=(yyfequal(global.gmlc_primary,0)?16777215:global.gmlc_primary);if(yyGetBool(_inst.gmlshow_spr_star_rating_cb)){draw_sprite_ext(_inst,118,_inst.gmlstar_rating,_inst.gmlx_star_rating,
 _inst.gmly_star_rating,1,1,0,gmlcol,1);};if(yyGetBool(_inst.gmlshow_spr_star_rating_cbn)){draw_sprite_ext(_inst,119,_inst.gmlstar_potential,_inst.gmlx_star_potential,_inst.gmly_star_potential,1,1,0,16777215,1);};if(yyGetBool(_inst.gmlshow_spr_attitude)){draw_sprite_ext(_inst,107,gml_Script_s_get_attitude_icon(_inst,_other,ds_map_find_value(_inst.gmlpmap,"attitude")),_inst.gmlx_attitude,_inst.gmly_attitude,1,1,0,16777215,1);};draw_sprite(_inst,110,0,_inst.gmlx_rookie,_inst.gmly_rookie);if(yyfgreater(_inst.gmlx_trade,
 0)){draw_sprite_ext(_inst,108,0,_inst.gmlx_trade,_inst.gmly_trade,1,1,0,16777215,yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),160))),1)),2));};if(yyGetBool(_inst.gmlshow_spr_condition)){{if(yyfgreater(_inst.gmli_condition,(-1))){{var gmlcs=(yyGetBool(global.gmlhd_fonts)?0.25:1)*(_inst.gmlcond_scale||1);draw_text_transformed_color(yyfminus(_inst.gmlx_condition,1),yyfplus(_inst.gmly_condition,1),_inst.gmltxt_condition,gmlcs,gmlcs,0,0,0,0,0,1);gml_Script_draw_hd_text_color(_inst,
 _other,0,0,"",0,0,0,0,0);draw_text_transformed_color(_inst.gmlx_condition,_inst.gmly_condition,_inst.gmltxt_condition,gmlcs,gmlcs,0,_inst.gmlcol_condition,_inst.gmlcol_condition,_inst.gmlcol_condition,_inst.gmlcol_condition,1);draw_sprite(_inst,111,_inst.gmli_condition,_inst.gmlx_condition2,_inst.gmly_condition);};}else {{gml_Script_draw_hd_text_color(_inst,_other,_inst.gmlx_condition,_inst.gmly_condition,_inst.gmltxt_condition,_inst.gmlcol_condition,_inst.gmlcol_condition,_inst.gmlcol_condition,_inst.gmlcol_condition,1);};};};};}function gml_Object_obj_playerprofile_rm_KeyPress_88(_inst,
@@ -8867,7 +9484,7 @@ __yy_gml_errCheck(gmlret_yds))," ("),__yy_gml_errCheck(string(gmlret_att))),")")
 gmltxt))){{gml_Script_draw_hd_text_color(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),1),yyfplus(__yy_gml_errCheck(gmlty),1),string_replace(gmltxt,"shad_",""),0,0,0,0,1);};};gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_replace(gmltxt,"shad_",""));gmlty=yyfplus(gmlty,(ds_list_size(_inst.gmllines)>12)?13:14);}};}function gml_Object_obj_stats_player_PreCreate_0(_inst,_other){event_inherited(_inst,_other);_inst.gmlstat_type=0;}function gml_Object_obj_tag_kr_Draw_64(_inst,_other){if(_inst.gmlis_blue_tag===true){gml_Script_s_draw_blue_tag(_inst,_other);return;};if(yyGetBool(_inst.gmlis_slot_tag)){gml_Script_s_draw_slot_tag(_inst,_other);return;};var gmlf=yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),
 60))),1)),2);if(yyGetBool(gml_Script_s_is_ui_selected(_inst,_other))){draw_sprite_ext(_inst,_inst.sprite_index,(yyGetBool(_inst.gmlselected)?1:0),_inst.x,_inst.y,1,1,0,gml_Script_s_ui_selected_color(_inst,_other),1);}else {draw_sprite(_inst,_inst.sprite_index,(yyGetBool(_inst.gmlselected)?1:0),_inst.x,_inst.y);};}function gml_Object_obj_tag_kr_PreCreate_0(_inst,_other){event_inherited(_inst,_other);_inst.gmlselected=false;_inst.gmlonClickAction=kgml_Script_btn_click_KR_Select;_inst.gmlbtn_image=372;_inst.gmlis_slot_tag=false;
 }function gml_Object_obj_meeting_player_Create_0(_inst,_other){_inst.gmllines=ds_list_create();_inst.gmlpmap=yyInst(_inst,_other,97).gmlplayer_profile;if(yyfequal(_inst.gmlpmap,(-4))){return;};var gmlname=yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"fname"))," "),__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"lname")));yyInst(_inst,_other,100532).gmltitle=gmlname;yyInst(_inst,_other,100539).gmltext=yyfplus(__yy_gml_errCheck(string(round(ds_map_find_value(_inst.gmlpmap,"attitude")))),
-"%");yyInst(_inst,_other,100538).gmltext=yyfplus(__yy_gml_errCheck(string(round(clamp(ds_map_find_value(_inst.gmlpmap,"condition"),0,100)))),"%");yyInst(_inst,_other,100540).gmltext=string(ds_map_find_value(_inst.gmlpmap,"xp_level"));var gmlcontract=yyfplus(yyfplus(yyfplus(yyfplus(yyfplus("$",__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"salary")))),"m ("),__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"contract")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Year"))),
+"%");yyInst(_inst,_other,100538).gmltext=yyfplus(__yy_gml_errCheck(string(round(clamp(ds_map_find_value(_inst.gmlpmap,"condition"),0,100)))),"%");yyInst(_inst,_other,100540).gmltext=string(ds_map_find_value(_inst.gmlpmap,"xp_level"));var gmlcontract=yyfplus(yyfplus(yyfplus(yyfplus(yyfplus("$",__yy_gml_errCheck(rbFmtM(ds_map_find_value(_inst.gmlpmap,"salary")))),"m ("),__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"contract")))),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"sla_Year"))),
 ")");yyInst(_inst,_other,100541).gmltext=gmlcontract;yyInst(_inst,_other,100535).gmltext=gml_Script_s_str(_inst,_other,"ui_BoostMorale");yyInst(_inst,_other,100534).gmltext=gml_Script_s_str(_inst,_other,"ui_BoostCondition");yyInst(_inst,_other,100536).gmltext=gml_Script_s_str(_inst,_other,"ui_LevelUp");yyInst(_inst,_other,100537).gmltext=gml_Script_s_str(_inst,_other,"ui_ExtendContract");yyInst(_inst,_other,100543).gmltext=string(gml_Script_s_get_meeting_cost_morale(_inst,_other,_inst.gmlpmap));
 yyInst(_inst,_other,100545).gmltext=string(gml_Script_s_get_meeting_cost_condition(_inst,_other,_inst.gmlpmap));yyInst(_inst,_other,100546).gmltext=gml_Script_s_get_meeting_cost_levelup(_inst,_other,_inst.gmlpmap);if(yyfgreaterequal(ds_map_find_value(_inst.gmlpmap,"attitude"),100)){yyInst(_inst,_other,100543).gmlactive=false;};if((yyGetBool(yyfless(ds_map_find_value(_inst.gmlpmap,"condition"),0)))||(yyGetBool(yyfgreaterequal(ds_map_find_value(_inst.gmlpmap,"condition"),100)))){yyInst(_inst,_other,
 100545).gmlactive=false;};_inst.gmlretirement=false;var gmlm4Image=yyInst(_inst,_other,100547).gmlimage;if(yyfequal(ds_map_find_value(_inst.gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,_other))){{yyInst(_inst,_other,100547).gmlactive=false;yyInst(_inst,_other,100547).gmltext=gml_Script_s_str(_inst,_other,"ui_Rookie");yyInst(_inst,_other,100547).gmlimage=(-1);};}else {if(yyfgreaterequal(ds_map_find_value(_inst.gmlpmap,"age"),gml_Script_s_get_max_age_normal(_inst,_other,_inst.gmlpmap))){{_inst.gmlretirement=true;
@@ -10338,8 +10955,6 @@ function rbFaShow(_i,_o){
             var e = list[(pg - 1) * per + n], cx = 38 + 68 * (n % 6), cy = (n < 6) ? 56 : 146, SC = 0.8;
             var ci = yyInst(_i, _o, instance_create_layer(0, 0, "Instances", 49));
             ci.gmlpmap = e.m; ci.x = cx; ci.y = cy; ci.image_xscale = SC; ci.image_yscale = SC;   // a real player card: tapping it opens the profile, where the player can be signed for the CC price
-            var tg = yyInst(_i, _o, instance_create_layer(0, 0, "Instances", 49));   // price tag under the card: amount + CC coin
-            tg.rbFaTag = String(ds_map_find_value(e.m, "creditcost")); tg.x = cx + 32 * SC; tg.y = cy + 80 * SC + 3; tg.gmlonClickAction = function (_a, _b) { };
         }
         if (pages > 1) {
             pv.visible = pg > 1; nx.visible = pg < pages;
@@ -10663,12 +11278,13 @@ function rbFalBar(_i,_o,x,y,label,val,mx){
 }
 function rbFalProfile(_i,_o,o){
     var P = rbTm.prof;
-    if (!P) { rbTm.sel = -1; return; }
+    if (!P) { rbTm.sel = -1; rbTm.devM = null; return; }
     var it = P.it, m = it.m, pos = it.code;
     draw_set_font(global.gmlfnt_small_flex); draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
     var pw = 208, ph = 172, lx = o.x + 24, ty = o.y + 40;
     rbFalBox(_i, _o, lx, ty, pw, ph, "DETAILS");
-    rbFalBox(_i, _o, o.x + 248, ty, pw, ph, "SKILLS");
+    var dv = rbDevScreenBox(_i, _o, rbTm, o.x + 248, ty, pw, ph, m);
+    if (dv) { rbFalBox(_i, _o, dv.x, dv.y, dv.w, dv.h, "DEV TRAIT"); rbDevLabel(_i, _o, rbTm.devLbl.lx, rbTm.devLbl.ly, m); } else { rbFalBox(_i, _o, o.x + 248, ty, pw, ph, "SKILLS"); }
     // card (Falcons colours), top-right of the details panel
     var oh = _i.gmlhelmet, os = _i.gmlshirt, op = _i.gmlpants;
     rbFalCols(_i);
@@ -10707,10 +11323,12 @@ function rbFalProfile(_i,_o,o){
     else if (pos === 6 || pos === 15 || pos === 7 || pos === 8 || pos === 9) { skl = "Tackling"; }
     var bx = o.x + 256;
     var rbMs = rbMasterScout(_i, _o, m);
-    rbFalBar(_i, _o, bx, o.y + 64, skl, rbFalV(m, "skill"), rbFalV(m, rbMs ? "max_skill" : "skill"));
-    rbFalBar(_i, _o, bx, o.y + 104, str, rbFalV(m, "strength"), rbFalV(m, rbMs ? "max_strength" : "strength"));
-    rbFalBar(_i, _o, bx, o.y + 144, "Speed", rbFalV(m, "speed"), rbFalV(m, rbMs ? "max_speed" : "speed"));
-    rbFalBar(_i, _o, bx, o.y + 184, "Stamina", rbFalV(m, "stamina"), rbFalV(m, rbMs ? "max_stamina" : "stamina"));
+    if (!dv) {
+        rbFalBar(_i, _o, bx, o.y + 64, skl, rbFalV(m, "skill"), rbFalV(m, rbMs ? "max_skill" : "skill"));
+        rbFalBar(_i, _o, bx, o.y + 104, str, rbFalV(m, "strength"), rbFalV(m, rbMs ? "max_strength" : "strength"));
+        rbFalBar(_i, _o, bx, o.y + 144, "Speed", rbFalV(m, "speed"), rbFalV(m, rbMs ? "max_speed" : "speed"));
+        rbFalBar(_i, _o, bx, o.y + 184, "Stamina", rbFalV(m, "stamina"), rbFalV(m, rbMs ? "max_stamina" : "stamina"));
+    }
     // TRADE button under the details panel (game-style slim button); opens the trade page
     rbTm.tradeBtn = rbFalBtn(_i, _o, 196, Math.round(lx + (pw - sprite_get_width(196)) / 2), o.y + 218, "TRADE", "trade", 0);
     draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
@@ -11164,12 +11782,12 @@ function rbTmStep(_i,_o){
     if (yyGetBool(mouse_check_button_pressed(1))) { rbTm.downId = over ? "back" : (xid !== "" ? xid : (aw !== "" ? aw : (hit >= 0 ? ("card" + hit) : ""))); }
     if (yyGetBool(mouse_check_button_released(1))) {
         var dn = rbTm.downId; rbTm.downId = "";
-        if (over && dn === "back") { rbBjSound(_i,_o); if (rbTm.trade) { if (rbTm.tradePage) { rbTm.tradePage = (rbTm.tradePage === "myroster" || rbTm.tradePage === "theirroster") ? "player" : ""; } else { rbTm.trade = false; } } else if (rbTm.sel >= 0) { rbTm.sel = -1; rbTm.prof = null; } else { rbTmClose(); } return; }
+        if (over && dn === "back") { rbBjSound(_i,_o); rbDevHide(); if (rbTm.trade) { if (rbTm.tradePage) { rbTm.tradePage = (rbTm.tradePage === "myroster" || rbTm.tradePage === "theirroster") ? "player" : ""; } else { rbTm.trade = false; } } else if (rbTm.sel >= 0) { rbTm.sel = -1; rbTm.prof = null; } else { rbTmClose(); } return; }
         if (xid !== "" && dn === xid) { rbBjSound(_i,_o); if (xid === "trade" && rbTradeClosed(_i,_o)) { rbTm.msg = { lines: ["TRADE DEADLINE", "HAS PASSED"] }; } else if (xid === "trade") { rbTm.trade = true; rbTm.tradePage = ""; rbTm.theirTrade = (rbTm.prof && rbTm.prof.it) ? [rbTm.prof.it] : []; rbTm.theirPicks = []; rbTm.theirPickNum = []; rbTm.myPickNum = []; } else if (xid === "tplayer") { rbTm.tradePage = "player"; } else if (xid === "offer") { rbTradeOffer(_i, _o); } else if (xid === "tplus") { rbTm.tList = (rbTm.list || []).filter(function (z) { return (rbTm.theirTrade || []).indexOf(z) < 0; }); rbTm.tradePage = "theirroster"; } else if (xid.indexOf("tx") === 0) { rbTm.theirTrade.splice(Number(xid.substring(2)), 1); } else if (xid.indexOf("ty") === 0) { rbPkDel(false, Number(xid.substring(2))); } else if (xid.indexOf("tk") === 0) { rbPkAdd(false, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("tc") === 0) { var tci = Number(xid.substring(2)), tcp = rbTm.tList ? rbTm.tList[tci] : null; if (tcp && (rbTm.theirTrade || (rbTm.theirTrade = [])).indexOf(tcp) < 0) { rbTm.theirTrade.push(tcp); } rbTm.tradePage = "player"; } else if (xid.indexOf("rp") === 0) { rbPkDel(true, Number(xid.substring(2))); } else if (xid.indexOf("pk") === 0) { rbPkAdd(true, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("rm") === 0) { rbTm.myTrade.splice(Number(xid.substring(2)), 1); } else if (xid.indexOf("rp") === 0) { rbPkDel(true, Number(xid.substring(2))); } else if (xid.indexOf("pk") === 0) { rbPkAdd(true, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("rm") === 0) { rbTm.myTrade.splice(Number(xid.substring(2)), 1); } else if (xid === "plus") { rbTm.myList = rbFalMyList(_i, _o); rbTm.tradePage = "myroster"; } else if (xid.charAt(0) === "m" && xid !== "m") { var mi = Number(xid.substring(1)), mp = rbTm.myList ? rbTm.myList[mi] : null; if (mp && (rbTm.myTrade || (rbTm.myTrade = [])).indexOf(mp) < 0 && rbTm.myTrade.filter(function (z) { return z.m === mp.m; }).length === 0) { rbTm.myTrade.push(mp); } rbTm.tradePage = "player"; } else { rbTm.tradeChoice = xid; } return; }
         if (aw !== "" && dn === aw) { rbBjSound(_i,_o); rbTm.ti = (rbTm.ti + (aw === "next" ? 1 : RB_TEAMS.length - 1)) % RB_TEAMS.length; rbTmLoad(_i,_o); return; }
         if (hit >= 0 && dn === ("card" + hit)) { rbBjSound(_i,_o); try { rbFalSelect(_i,_o,hit); } catch (_e) { try { console.error("profile error", _e); } catch (_x) {} rbTm.sel = -1; rbTm.prof = null; } return; }
     }
-    if (yyGetBool(keyboard_check_pressed(27))) { rbBjSound(_i,_o); if (rbTm.trade) { if (rbTm.tradePage) { rbTm.tradePage = (rbTm.tradePage === "myroster" || rbTm.tradePage === "theirroster") ? "player" : ""; } else { rbTm.trade = false; } } else if (rbTm.sel >= 0) { rbTm.sel = -1; rbTm.prof = null; } else { rbTmClose(); } }
+    if (yyGetBool(keyboard_check_pressed(27))) { rbBjSound(_i,_o); rbDevHide(); if (rbTm.trade) { if (rbTm.tradePage) { rbTm.tradePage = (rbTm.tradePage === "myroster" || rbTm.tradePage === "theirroster") ? "player" : ""; } else { rbTm.trade = false; } } else if (rbTm.sel >= 0) { rbTm.sel = -1; rbTm.prof = null; } else { rbTmClose(); } }
 }
 function rbTmDraw(_i,_o){
     if (!rbTm) return;
@@ -11224,7 +11842,19 @@ function gml_RoomCC_rm_home_23_PreCreate(_inst,_other){
     _inst.gmlimage = RB_PR_ICON;
     _inst.gmlonClickAction = function(_i,_o){ rbProspects(_i,_o); };
 }
-var RB_PR_PER = 10, RB_PR_SCOUTS = 3;   // prospects per page (5 x 2 cards) / scouts you get each week
+var RB_PR_PER = 10, RB_PR_SCOUTS = 7;   // prospects per page (5 x 2 cards) / base scouts you get each week
+// weekly scouts by staff: base 7; Scout-trait coaches (trait 9): 1 -> 15, 2 -> 25; Master Scout coaches (trait 11): 1 -> 25, 2 -> 45 (best applicable tier wins)
+var RB_PR_SCOUTS_BY_SCOUT = [7, 15, 25], RB_PR_SCOUTS_BY_MASTER = [7, 25, 45];
+function rbPrScoutCap(_i,_o){
+    try {
+        var M = yyInst(_i, _o, 97), L = M.gmlstafflist, sc = 0, ms = 0;
+        for (var k = 0; k < ds_list_size(L); k++) {
+            var c = ds_list_find_value(L, k), t = Number(ds_map_find_value(c, "trait"));
+            if (t === 9) { sc++; } else if (t === 11) { ms++; }
+        }
+        return Math.max(RB_PR_SCOUTS, RB_PR_SCOUTS_BY_SCOUT[Math.min(sc, 2)], RB_PR_SCOUTS_BY_MASTER[Math.min(ms, 2)]);
+    } catch (_e) { return RB_PR_SCOUTS; }
+}
 // builds the card list from the game's own pro draft list (obj_master.draftlist), the exact players the real draft will use
 // best rating first; players with the SAME rating are put in random order (a plain sort keeps the list order, which has offense positions first)
 function rbDraftRankSort(arr, ratingOf) {
@@ -11248,18 +11878,44 @@ function rbPrBuild(_i,_o){
     for (var q3 = 0; q3 < out.length; q3++) { out[q3].rank = rbN(ds_map_find_value(out[q3].m, "draft_rank")); }
     return out;
 }
-// ---- sort toggle for the prospects screen: 0 = by draft rank, 1 = by position (game default), 2+ = that position first
+// ---- sort toggle for the prospects screen: 0 = by draft rank (opens on this), 1 = by position, 2+ = that position first
 var RB_PR_POS_ORDER = [1, 2, 4, 3, 5, 16, 6, 15, 7, 8, 9, 10];   // QB RB WR TE IOL OT DT ED LB CB S K
 var RB_PR_POS_NAME = { 1: "QB", 2: "RB", 3: "TE", 4: "WR", 5: "IOL", 16: "OT", 6: "DT", 15: "ED", 7: "LB", 8: "CB", 9: "S", 10: "K" };
 function rbPrPositions(){ var seen = {}, all = rbPr.all || rbPr.cards; for (var i = 0; i < all.length; i++) { seen[all[i].code] = 1; } return RB_PR_POS_ORDER.filter(function (p) { return seen[p]; }); }
 function rbPrApplySort(){
     var mode = rbPr.sortMode, all = rbPr.all || rbPr.cards, tgt = mode >= 2 ? rbPrPositions()[mode - 2] : -1;
     var list = mode >= 2 ? all.filter(function (c) { return c.code === tgt; }) : all.slice();
+    var fm = rbPr.filterMode || 0;   // 0 = all, 1 = scouted only, 2 = unscouted only
+    if (fm !== 0) { list = list.filter(function (c) { return rbPrIsScouted(rbPr.gi, rbPr.go, c.m) === (fm === 1); }); }
+    if (rbPr.favFilt) { list = list.filter(function (c) { return rbPrFav(c.m); }); }   // FAVORITES filter: stacks with the scouted filter and the position sort
     list.sort(function (x, y) {
         if (mode === 1) { var ix = RB_PR_POS_ORDER.indexOf(x.code), iy = RB_PR_POS_ORDER.indexOf(y.code); if (ix !== iy) { return ix - iy; } }
         return x.rank - y.rank;
     });
     rbPr.cards = list; rbPr.pg = 1;
+}
+function rbPrFilterLabel(){ return ["ALL", "SCOUTED", "UNSCOUTED"][rbPr.filterMode || 0]; }
+// ---- favorites: the flag lives on the prospect's own map ("rb_fav" = 1), so it is saved with the draft list and the live draft can read it too
+function rbPrFav(m){ try { return Number(ds_map_find_value(m, "rb_fav")) === 1; } catch (_e) { return false; } }
+function rbPrToggleFav(_i,_o,it){
+    var m = it.m; ds_map_set(m, "rb_fav", rbPrFav(m) ? 0 : 1);
+    try { gml_Script_s_savegame(_i, _o); } catch (_e) {}
+}
+// same button as rbPrBtn, but when "on" the button body is gold and the text black; returns the clickable rect
+function rbPrFavBtn(_i,_o,spr,x,y,label,id,on,maxTw){
+    var w = sprite_get_width(spr), h = sprite_get_height(spr);
+    var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+    var pr = yyGetBool(mouse_check_button(1)) && rbPr.downId === id && mx >= x && mx <= x + w && my >= y && my <= y + h;
+    var fill = on ? 55295 : global.gmlc_background;
+    draw_set_alpha(1);
+    var tx = x + w / 2 + 1, ty = y + h / 2 - 1;
+    if (!pr) { draw_sprite(_i, spr, 0, x, y); draw_sprite_ext(_i, spr, 2, x, y, 1, 1, 0, fill, 1); }
+    else { draw_sprite(_i, spr, 1, x, y); draw_sprite_ext(_i, spr, 2, x - 2, y + 2, 1, 1, 0, fill, 1); tx -= 2; ty += 2; }
+    draw_set_font(global.gmlfnt_small_flex); draw_set_halign(1); draw_set_valign(1); draw_set_color(on ? 0 : 16777215);
+    var tw = gml_Script_string_hd_width(_i, _o, label), sc = (maxTw > 0 && tw > maxTw) ? maxTw / tw : 1;
+    if (sc < 1) { gml_Script_draw_hd_text_transformed(_i, _o, tx, ty, label, sc, sc, 0); } else { gml_Script_draw_hd_text(_i, _o, tx, ty, label); }
+    draw_set_color(16777215);
+    return { x: x, y: y, w: w, h: h };
 }
 function rbPrSortLabel(_i,_o){
     if (rbPr.sortMode === 0) { return "RANK"; }
@@ -11270,6 +11926,8 @@ function rbPrSortLabel(_i,_o){
 // each prospect you scout is also stamped with the year+week, so "scouts used this week" = prospects stamped with the current week (resets by itself)
 function rbPrStamp(_i,_o){ var M = yyInst(_i, _o, 97); return rbN(M.gmlyear) * 100 + rbN(M.gmlweek); }
 function rbPrScouted(m){ try { return yyGetBool(ds_map_find_value(m, "scouted")); } catch (_e) { return false; } }
+// scouted for display/filtering: you scouted him, the game's interview flagged him, or your Master Scout coach already reveals him
+function rbPrIsScouted(_i,_o,m){ return rbPrScouted(m); }   // only prospects you (or the game's own interview button) actually scouted; Master Scout still reveals the info but no longer counts as scouted
 function rbPrUsed(_i,_o){
     var st = rbPrStamp(_i, _o), n = 0;
     var allc = rbPr.all || rbPr.cards;
@@ -11279,7 +11937,7 @@ function rbPrUsed(_i,_o){
     }
     return n;
 }
-function rbPrLeft(_i,_o){ return Math.max(0, RB_PR_SCOUTS - rbPrUsed(_i, _o)); }
+function rbPrLeft(_i,_o){ return Math.max(0, rbPrScoutCap(_i, _o) - rbPrUsed(_i, _o)); }
 function rbPrScout(_i,_o,it){
     var m = it.m;
     if (rbPrScouted(m) || rbPrLeft(_i, _o) < 1) { return; }
@@ -11294,7 +11952,7 @@ function rbPrSelect(_i,_o,i){
     rbPr.prof = P; rbPr.sel = i;
 }
 function rbProspects(_i,_o){
-    rbPr = { downId: "", pg: 1, cards: [], note: "", sel: -1, prof: null, scoutBtn: null, sortBtn: null, sortMode: 1, ord: false, ordBtn: null, ordList: [], ordScroll: 0, ordDrag: null };
+    rbPr = { downId: "", pg: 1, cards: [], note: "", sel: -1, prof: null, scoutBtn: null, sortBtn: null, sortMode: 0, filtBtn: null, filterMode: 0, ord: false, ordBtn: null, ordList: [], ordScroll: 0, ordDrag: null };
     var M = yyInst(_i, _o, 97);
     var proMode = !yyGetBool(M.gmlqb_mode) && !yyGetBool(gml_Script_s_is_co_mode(_i, _o));
     if (!proMode) { rbPr.note = "NO DRAFT CLASS IN THIS MODE"; }
@@ -11306,7 +11964,7 @@ function rbProspects(_i,_o){
                 if (!rbCd) { rbPr = null; rbCd = { mode: "class", title: "GENERATING DRAFT CLASS", wait: 3, k: 0, total: 2 }; global.rbCdOpen = true; return; }   // loading page first, then this screen opens
                 gml_Script_s_create_draftlist(_i, _o);
             }
-            rbPr.cards = rbPrBuild(_i, _o); rbPr.all = rbPr.cards.slice();
+            rbPr.gi = _i; rbPr.go = _o; rbPr.cards = rbPrBuild(_i, _o); rbPr.all = rbPr.cards.slice(); rbPrApplySort();   // opens sorted by draft rank
         } catch (_e) { try { console.error("prospects error", _e); } catch (_x) {} rbPr.note = "COULD NOT LOAD THE DRAFT CLASS"; }
         if (!rbPr.cards.length && rbPr.note === "") { rbPr.note = "NO PROSPECTS YET"; }
     }
@@ -11480,9 +12138,12 @@ function rbPrRects(o){
     return out;
 }
 function rbPrBack(_i,_o){
-    rbBjSound(_i,_o);
+    rbBjSound(_i,_o); rbDevHide();
     if (rbPr.ord) { rbPr.ord = false; return; }
-    if (rbPr.sel >= 0) { rbPr.sel = -1; rbPr.prof = null; rbPr.scoutBtn = null; } else { rbPrClose(); }
+    if (rbPr.sel >= 0) {
+        rbPr.sel = -1; rbPr.prof = null; rbPr.scoutBtn = null; rbPr.devM = null;
+        if (rbPr.filterMode || rbPr.favFilt) { var pg0 = rbPr.pg; rbPr.gi = _i; rbPr.go = _o; rbPrApplySort(); rbPr.pg = Math.max(1, Math.min(pg0, Math.ceil(rbPr.cards.length / RB_PR_PER))); }
+    } else { rbPrClose(); }
 }
 function rbPrStep(_i,_o){
     var b = rbConBack(), o = rbBjOff(), ar = rbTmArrows(o);
@@ -11495,7 +12156,9 @@ function rbPrStep(_i,_o){
         var rc = rbPrRects(o); for (var k = 0; k < rc.length; k++) { if (inR(rc[k])) { hit = rc[k].i; } }
         if (rbPr.sortBtn && inR(rbPr.sortBtn)) { sc = "sort"; }
         if (rbPr.ordBtn && inR(rbPr.ordBtn)) { sc = "ord"; }
-    } else if (rbPr.scoutBtn && inR(rbPr.scoutBtn)) { sc = "scout"; }
+        if (rbPr.filtBtn && inR(rbPr.filtBtn)) { sc = "filt"; }
+        if (rbPr.favfBtn && inR(rbPr.favfBtn)) { sc = "favf"; }
+    } else { if (rbPr.scoutBtn && inR(rbPr.scoutBtn)) { sc = "scout"; } if (rbPr.favBtn && inR(rbPr.favBtn)) { sc = "fav"; } }
     if (yyGetBool(mouse_check_button_pressed(1))) { rbPr.downId = over ? "back" : (sc !== "" ? sc : (aw !== "" ? aw : (hit >= 0 ? ("card" + hit) : ""))); }
     if (yyGetBool(mouse_check_button_released(1))) {
         var dn = rbPr.downId; rbPr.downId = "";
@@ -11504,7 +12167,10 @@ function rbPrStep(_i,_o){
         if (sc === "ord" && dn === "ord" && !rbCd && rbPrOrderCold(_i, _o)) { rbBjSound(_i,_o); rbCd = { mode: "order", title: "GENERATING DRAFT ORDER", wait: 3, k: 0, total: Math.max(1, ds_list_size(yyInst(_i, _o, 97).gmlteamlist)) }; global.rbCdOpen = true; return; }
         if (sc === "ord" && dn === "ord") { rbBjSound(_i,_o); rbPr.ordRound = 1; rbPr.ordList = rbPrOrderBuild(_i, _o); rbPr.ordScroll = 0; rbPr.ordDrag = null; rbPr.ord = true; return; }
         if (sc === "sort" && dn === "sort") { rbBjSound(_i,_o); rbPr.sortMode = (rbPr.sortMode + 1) % (rbPrPositions().length + 2); rbPrApplySort(); return; }
-        if (sc !== "" && dn === sc) { rbBjSound(_i,_o); rbPrScout(_i, _o, rbPr.cards[rbPr.sel]); return; }
+        if (sc === "filt" && dn === "filt") { rbBjSound(_i,_o); rbPr.filterMode = ((rbPr.filterMode || 0) + 1) % 3; rbPr.gi = _i; rbPr.go = _o; rbPrApplySort(); return; }
+        if (sc === "favf" && dn === "favf") { rbBjSound(_i,_o); rbPr.favFilt = !rbPr.favFilt; rbPr.gi = _i; rbPr.go = _o; rbPrApplySort(); return; }
+        if (sc === "fav" && dn === "fav") { rbBjSound(_i,_o); rbPrToggleFav(_i, _o, rbPr.cards[rbPr.sel]); return; }
+        if (sc !== "" && sc !== "filt" && dn === sc) { rbBjSound(_i,_o); rbPrScout(_i, _o, rbPr.cards[rbPr.sel]); return; }
         if (aw !== "" && dn === aw) { rbBjSound(_i,_o); rbPr.pg = ((rbPr.pg - 1 + (aw === "next" ? 1 : pages - 1)) % pages) + 1; return; }
         if (hit >= 0 && dn === ("card" + hit)) { rbBjSound(_i,_o); rbPrSelect(_i, _o, hit); return; }
     }
@@ -11533,12 +12199,13 @@ function rbPrBtn(_i,_o,spr,x,y,label,id,en,maxTw){
 // prospect profile (same layout as the Teams profile); potential, attitude and the max attribute bars stay hidden until the player is scouted
 function rbPrProfile(_i,_o,o){
     var P = rbPr.prof;
-    if (!P) { rbPr.sel = -1; return; }
+    if (!P) { rbPr.sel = -1; rbPr.devM = null; return; }
     var it = P.it, m = it.m, pos = it.code, known = rbPrScouted(m) || rbMasterScout(_i, _o, m);
     draw_set_font(global.gmlfnt_small_flex); draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
     var pw = 208, ph = 172, lx = o.x + 24, ty = o.y + 40;
     rbFalBox(_i, _o, lx, ty, pw, ph, "DETAILS");
-    rbFalBox(_i, _o, o.x + 248, ty, pw, ph, "SKILLS");
+    var dv = rbDevScreenBox(_i, _o, rbPr, o.x + 248, ty, pw, ph, m);
+    if (dv) { rbFalBox(_i, _o, dv.x, dv.y, dv.w, dv.h, "DEV TRAIT"); rbDevLabel(_i, _o, rbPr.devLbl.lx, rbPr.devLbl.ly, m); } else { rbFalBox(_i, _o, o.x + 248, ty, pw, ph, "SKILLS"); }
     var oh = _i.gmlhelmet, os = _i.gmlshirt, op = _i.gmlpants;
     _i.gmlhelmet = rbFalHex(0x808080); _i.gmlshirt = rbFalHex(0xE8E8E8); _i.gmlpants = rbFalHex(0x808080);
     var cwid = sprite_get_width(172), cx = Math.round(lx + pw - cwid - 12);
@@ -11567,16 +12234,21 @@ function rbPrProfile(_i,_o,o){
     else if (pos === 5 || pos === 16) { skl = "Blocking"; }
     else if (pos === 6 || pos === 15 || pos === 7 || pos === 8 || pos === 9) { skl = "Tackling"; }
     var bx = o.x + 256;
-    rbFalBar(_i, _o, bx, o.y + 64, skl, rbFalV(m, "skill"), rbFalV(m, known ? "max_skill" : "skill"));
-    rbFalBar(_i, _o, bx, o.y + 104, str, rbFalV(m, "strength"), rbFalV(m, known ? "max_strength" : "strength"));
-    rbFalBar(_i, _o, bx, o.y + 144, "Speed", rbFalV(m, "speed"), rbFalV(m, known ? "max_speed" : "speed"));
-    rbFalBar(_i, _o, bx, o.y + 184, "Stamina", rbFalV(m, "stamina"), rbFalV(m, known ? "max_stamina" : "stamina"));
+    if (!dv) {
+        rbFalBar(_i, _o, bx, o.y + 64, skl, rbFalV(m, "skill"), rbFalV(m, known ? "max_skill" : "skill"));
+        rbFalBar(_i, _o, bx, o.y + 104, str, rbFalV(m, "strength"), rbFalV(m, known ? "max_strength" : "strength"));
+        rbFalBar(_i, _o, bx, o.y + 144, "Speed", rbFalV(m, "speed"), rbFalV(m, known ? "max_speed" : "speed"));
+        rbFalBar(_i, _o, bx, o.y + 184, "Stamina", rbFalV(m, "stamina"), rbFalV(m, known ? "max_stamina" : "stamina"));
+    }
     // SCOUT button under the details panel, and how many scouts are left this week
     var left = rbPrLeft(_i, _o), bxs = Math.round(lx + (pw - sprite_get_width(196)) / 2);
     var lab = known ? "SCOUTED" : (left > 0 ? "SCOUT" : "NONE LEFT");
     rbPr.scoutBtn = rbPrBtn(_i, _o, 196, bxs, o.y + 218, lab, "scout", !known && left > 0, 66);
+    // FAVORITE toggle, bottom-right (same row as the back button); gold while this prospect is a favorite
+    var fsb = 196, fsw = sprite_get_width(fsb), fsh = sprite_get_height(fsb), fbk = rbConBack();
+    rbPr.favBtn = rbPrFavBtn(_i, _o, fsb, Math.round(o.w - fbk.x - fsw), Math.round(fbk.y + (fbk.h - fsh) / 2), "FAVORITE", "fav", rbPrFav(m), fsw - 8);
     draw_set_font(global.gmlfnt_small_flex); draw_set_halign(1); draw_set_valign(1); draw_set_color(16777215);
-    gml_Script_draw_hd_text(_i, _o, lx + pw / 2, o.y + 254, "SCOUTS LEFT THIS WEEK: " + left + "/" + RB_PR_SCOUTS);
+    gml_Script_draw_hd_text(_i, _o, lx + pw / 2, o.y + 254, "SCOUTS LEFT THIS WEEK: " + left + "/" + rbPrScoutCap(_i, _o));
     draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
 }
 function rbPrDraw(_i,_o){
@@ -11596,10 +12268,10 @@ function rbPrDraw(_i,_o){
         var n = rbPr.cards.length, pages = Math.max(1, Math.ceil(n / RB_PR_PER));
         var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0), md = yyGetBool(mouse_check_button(1));
         if (rbPr.ord) { rbPrOrderDraw(_i, _o, o); var sb0 = 196, sbw0 = sprite_get_width(sb0), sbh0 = sprite_get_height(sb0), bk0 = rbConBack(); rbPr.rdBtn = rbPrBtn(_i, _o, sb0, Math.round(o.w - bk0.x - sbw0), Math.round(bk0.y + (bk0.h - sbh0) / 2), rbOrd(rbPr.ordRound || 1).toUpperCase() + " ROUND", "rd", true, sbw0 - 8); draw_set_halign(1); draw_set_color(16777215); }
-        else if (n === 0) { rbBjT(o.w * 0.5, o.y + 120, rbPr.note, 1, 16777215, 1); }
+        else if (n === 0 && !(rbPr.all && rbPr.all.length > 0)) { rbBjT(o.w * 0.5, o.y + 120, rbPr.note, 1, 16777215, 1); }
         else if (rbPr.sel >= 0) { rbPrProfile(_i, _o, o); }
         else {
-            rbBjT(o.w * 0.5, o.y + 36, n + " PROSPECTS   SCOUTS LEFT: " + rbPrLeft(_i, _o) + "/" + RB_PR_SCOUTS, 1, 16777215, 1);
+            rbBjT(o.w * 0.5, o.y + 36, n + " PROSPECTS   SCOUTS LEFT: " + rbPrLeft(_i, _o) + "/" + rbPrScoutCap(_i, _o), 1, 16777215, 1);
             // cards: the game's own player card, neutral grey / white college colours; a star marks the ones you have scouted
             var oh = _i.gmlhelmet, os = _i.gmlshirt, op = _i.gmlpants;
             _i.gmlhelmet = rbFalHex(0x808080); _i.gmlshirt = rbFalHex(0xE8E8E8); _i.gmlpants = rbFalHex(0x808080);
@@ -11608,7 +12280,7 @@ function rbPrDraw(_i,_o){
                 var r = rc[k], it = rbPr.cards[r.i];
                 var prs = md && rbPr.downId === ("card" + r.i) && mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h;
                 rbFalCard(_i, _o, r.cx, r.cy, it, 1, prs);
-                if (rbPrScouted(it.m)) { draw_sprite_ext(_i, 103, 0, r.cx + (prs ? 0 : 2) + r.w - 11, r.cy + (prs ? 0 : -2) + 21, 1, 1, 0, 65535, 1); }
+                if (rbPrIsScouted(_i, _o, it.m)) { draw_sprite_ext(_i, 103, 0, r.cx + (prs ? 0 : 2) + r.w - 11, r.cy + (prs ? 0 : -2) + 21, 1, 1, 0, 65535, 1); }
             }
             _i.gmlhelmet = oh; _i.gmlshirt = os; _i.gmlpants = op;
             shader_reset();
@@ -11624,6 +12296,8 @@ function rbPrDraw(_i,_o){
             var sbs = 196, sbw = sprite_get_width(sbs), sbh = sprite_get_height(sbs), bk = rbConBack();
             rbPr.sortBtn = rbPrBtn(_i, _o, sbs, Math.round(o.w - bk.x - sbw), Math.round(bk.y + (bk.h - sbh) / 2), rbPrSortLabel(_i, _o), "sort", true, sbw - 8);
             rbPr.ordBtn = rbPrBtn(_i, _o, sbs, Math.round(o.w - bk.x - sbw) - sbw - 6, Math.round(bk.y + (bk.h - sbh) / 2), "ORDER", "ord", true, sbw - 8);
+            rbPr.filtBtn = rbPrBtn(_i, _o, sbs, Math.round(o.w - bk.x - sbw) - 2 * (sbw + 6), Math.round(bk.y + (bk.h - sbh) / 2), rbPrFilterLabel(), "filt", true, sbw - 8);
+            rbPr.favfBtn = rbPrFavBtn(_i, _o, sbs, Math.round(o.w - bk.x - sbw) - 3 * (sbw + 6), Math.round(bk.y + (bk.h - sbh) / 2), "FAVORITES", "favf", !!rbPr.favFilt, sbw - 8);
             draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1);
             if (pages > 1) {
                 rbBjT(o.w * 0.5, o.y + 240, "PAGE " + rbPr.pg + "/" + pages, 1, 16777215, 1);
@@ -12259,6 +12933,19 @@ function rbDraftPickPos() {
     return 1;
 }
 var rbDrMode = 0;
+var rbDrScF = 0, rbDrFavF = 0;   // live draft filters: SCOUT (0 = all, 1 = scouted only, 2 = unscouted only) and FAV (1 = favorites only)
+// does this prospect pass the live draft view? (position pick from SORT + SCOUT filter + FAV filter, all stacked)
+function rbDrPass(p, tgt) {
+    try {
+        if (tgt !== undefined && tgt >= 0 && ds_map_find_value(p, "position") !== tgt) { return false; }
+        if (rbDrFavF && Number(ds_map_find_value(p, "rb_fav")) !== 1) { return false; }
+        if (rbDrScF) {
+            var sc = rbPrScouted(p);
+            if (!!sc !== (rbDrScF === 1)) { return false; }
+        }
+    } catch (_e) {}
+    return true;
+}
 // ================= LIVE DRAFT =================
 // The CPU teams now pick one at a time, in draft order, from the same board you pick from. Every team has a 1:30 clock; a CPU team makes its pick at a random moment
 // of that clock (slowly), the player disappears from the board and joins that team's saved roster. The left panel shows who is on the clock and how much time is left.
@@ -12274,6 +12961,22 @@ var RB_DL_LIM = { 1: 1, 2: 1, 3: 1, 4: 3, 5: 5, 6: 4, 7: 3, 8: 2, 9: 2, 10: 1 };
 var RB_DL_TAGS = { 1: "QB", 2: "RB", 3: "TE", 4: "WR", 5: "OL", 6: "DL", 7: "LB", 8: "CB", 9: "S", 10: "K" };
 
 function rbDlOn() { try { return !!(rbDl && rbDl.on && g_pBuiltIn.get_current_room() === 5); } catch (_e) { return false; } }
+// ---- the live draft can never be left for the main menu screens (0 = master, 1 = title, 14 = home) while it is running ----
+var RB_DL_MENU_ROOMS = [0, 1, 14];
+function rbDlLive() {
+    try {
+        if (!rbDl || !rbDl.on || rbDl.finishing || !rbDl.order || !rbDl.inst) { return false; }
+        var g = yyInst(rbDl.inst, rbDl.inst, 97);
+        return Number(g.gmldraft_round) === Number(rbDl.round) && rbDl.round >= 1 && rbDl.round <= 3;
+    } catch (_e) { return false; }
+}
+// called by room_goto: returns the room to really go to, or -1 to stay where we are
+function rbDlGuardRoom(target) {
+    try {
+        if (RB_DL_MENU_ROOMS.indexOf(target) < 0 || !rbDlLive()) { return target; }
+        return (g_pBuiltIn.get_current_room() === 5) ? -1 : 5;
+    } catch (_e) { return target; }
+}
 function rbDlGx0() { return rbDlOn() ? 168 : 48; }
 function rbDlGy0() { return rbDlOn() ? 50 : 48; }
 function rbDlDx() { return rbDlOn() ? 55 : 80; }
@@ -12386,8 +13089,12 @@ function rbDlWarm() {
 // while a panel is open on top of the draft screen the board cards must not react to taps
 function rbDlCardsSync(blk) {
     if (!blk && !rbDl.cardsOff) { return; }
+    if (global.rbDlOrderOpen === true) { rbDl.ordWas = true; } else if (!blk) { rbDl.ordWas = false; }
+    var hid = (global.rbDlOrderOpen === true) || (rbDl.ordWas === true);
     var arr = GetWithArray(49);
-    for (var k in arr) { if (!arr.hasOwnProperty(k)) { continue; } arr[k].gmlactive = !blk; }
+    for (var k in arr) { if (!arr.hasOwnProperty(k)) { continue; } arr[k].gmlactive = !blk; arr[k].visible = !hid; }
+    try { yyInst(rbDl.inst, rbDl.inst, 100064).visible = !hid; } catch (_e) {}
+    try { var _pg = Number(yyInst(rbDl.inst, rbDl.inst, 97).gmldraft_page) || 1, _mx = Number(rbDl.inst.gmlpage_max) || 1; yyInst(rbDl.inst, rbDl.inst, 100062).visible = (!hid && _pg > 1); yyInst(rbDl.inst, rbDl.inst, 100063).visible = (!hid && _pg < _mx); } catch (_e) {}
     rbDl.cardsOff = !!blk;
 }
 // the draft screen opened: set up (or keep) the live draft of this round. Returns true when the live draft is running.
@@ -12484,7 +13191,7 @@ function rbDlDoCpu(_i, _o, slot, ctx) {
 function rbDlRefresh(_i, _o, pickedIdx) {
     try {
         var inst = rbDl.inst, M = yyInst(_i, _o, 97);
-        var newMax = Math.max(1, Math.ceil(ds_list_size(M.gmldraftlist) / 10));
+        var newMax = Math.max(1, Math.ceil(rbDlViewSize(M.gmldraftlist) / 10));
         if (pickedIdx !== undefined && pickedIdx >= (Number(M.gmldraft_page) || 1) * 10 && newMax === inst.gmlpage_max) { return; }   // picked player was on a later page: the cards on screen did not change
         rbDl.keepSort = (rbDrMode === 0);   // removing one player keeps a rank-sorted list sorted
         inst.gmlpage_max = newMax;
@@ -12522,9 +13229,20 @@ function rbDlDoSort(_i, _o) {
         gml_Script_s_update_draft_page(global.rbDrRoom, global.rbDrRoom);
     } catch (_e) { try { console.error("sort error", _e); } catch (_x) {} }
 }
+function rbDlDoFilt(_i, _o) {   // a SCOUT / FAV filter button was pressed: re-sort the board and go back to page 1 (like rbDlDoSort)
+    try {
+        var o = global.rbDrObj; if (!o || !global.rbDrRoom) { return; }
+        rbDraftApplySort(o, o);
+        global.gmldraft_page_reset = true;
+        o.gmldraft_page = 1;
+        gml_Script_s_update_draft_page(global.rbDrRoom, global.rbDrRoom);
+    } catch (_e) { try { console.error("filter error", _e); } catch (_x) {} }
+}
 function rbDlTick(_i, _o) {
-    if (!rbDl || !rbDl.on) { global.rbDlSortReq = false; return; }
+    if (!rbDl || !rbDl.on) { global.rbDlSortReq = false; global.rbDlFiltReq = 0; return; }
+    if (global.rbDlFiltReq) { var _fq = global.rbDlFiltReq; global.rbDlFiltReq = 0; if (g_pBuiltIn.get_current_room() === 5 && !rbDl.finishing && !yyGetBool(instance_exists(104))) { if (_fq === 1) { rbDrScF = (rbDrScF + 1) % 3; } else { rbDrFavF = rbDrFavF ? 0 : 1; } rbDlDoFilt(_i, _o); } }
     if (global.rbDlSortReq) { global.rbDlSortReq = false; if (g_pBuiltIn.get_current_room() === 5 && !rbDl.finishing && !yyGetBool(instance_exists(104))) { rbDlDoSort(_i, _o); } }
+    try { var _rm = g_pBuiltIn.get_current_room(); if (RB_DL_MENU_ROOMS.indexOf(_rm) >= 0 && rbDlLive()) { room_goto(5); return; } } catch (_e) {}   // somehow ended up on a menu screen while the draft is live: divert back
     if (g_pBuiltIn.get_current_room() !== 5) { rbDl.last = 0; rbDl.away = true; rbDl.cardsOff = false; rbDl.showOrder = false; global.rbDlOrderOpen = false; if (rbDl.dirty) { rbDlFlush(); } return; }
     var now = (new Date()).getTime(), dt = rbDl.last ? Math.min(0.25, (now - rbDl.last) / 1000) : 0;
     rbDl.last = now;
@@ -12566,6 +13284,11 @@ function rbDlTick(_i, _o) {
 // you tried to sign a board player while a CPU team is on the clock
 function rbDlBlockPick(_i, _o) {
     try {
+        var _pp = yyInst(_i, _o, 97).gmlplayer_profile;
+        if (_pp >= 0 && ds_map_exists(_pp, "rb_walked") && ds_map_find_value(_pp, "rb_walked")) {
+            gml_Script_s_create_message(_i, _o, "", "This player isn't interested in signing with you.", gml_Script_s_str(_i, _o, "ui_Continue"), "", kgml_Script_s_msg_clear, "", global.gmlc_background, 1);
+            return true;
+        }
         if (!rbDl || !rbDl.on || rbDl.finishing || !rbDl.order) { return false; }
         rbDlSettle(_i, _o);
         var g = yyInst(_i, _o, 97);
@@ -12592,6 +13315,40 @@ function rbDlTeamCol(ti) {
 }
 function rbDlFmt(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + ((s % 60) < 10 ? "0" : "") + (s % 60); }
 function rbDlNick(ti) { var p = String(RB_TEAMS[ti][0]).split(" "); return p[p.length - 1]; }
+// the game's real button sprites, looked up by name (spr_button_32 = square, spr_button_74 = short text button, spr_button_104 = long text button)
+var rbSprCache = {};
+function rbSprByName(nm, fb) {
+    if (rbSprCache[nm] !== undefined) return rbSprCache[nm];
+    var r = -1;
+    try { for (var i = 0; i < 1000; i++) { if (sprite_get_name(i) === nm) { r = i; break; } } } catch (e) {}
+    if (r < 0) r = fb;
+    rbSprCache[nm] = r;
+    return r;
+}
+// real game button (sprite frames 0/1 + the tinted frame 2, pressed = shifted down-left like obj_button); lines = [[text, colour, y-offset], ...]; returns true on a tap
+function rbDlSprBtn(_i, _o, x, y, spr, lines, sc, scY, ts) {
+    sc = sc || 1;
+    scY = scY || sc; ts = (ts === undefined) ? sc : ts;
+    var w = sprite_get_width(spr) * sc, h = sprite_get_height(spr) * scY;
+    var mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+    var pr = mouse_check_button(1) && mx >= x && mx <= x + w && my >= y && my <= y + h;
+    var M = yyInst(_i, _o, 97), col = M.gmlqb_mode ? global.gmlc_buttons : global.gmlc_background;
+    var ox = pr ? -2 * sc : 0, oy = pr ? 2 * scY : 0;
+    draw_set_alpha(1);
+    draw_sprite_ext(_i, spr, pr ? 1 : 0, x, y, sc, scY, 0, 16777215, 1);
+    draw_sprite_ext(_i, spr, 2, x + ox, y + oy, sc, scY, 0, col, 1);
+    draw_set_font(global.gmlfnt_small_flex); draw_set_halign(1); draw_set_valign(1);
+    for (var k = 0; k < lines.length; k++) {
+        var ln = lines[k], tw = gml_Script_string_hd_width(_i, _o, ln[0]) * ts, fit = (tw > w - 8 * sc) ? (w - 8 * sc) / tw : 1, s2 = ts * fit;
+        draw_set_color(ln[1]);
+        if (s2 !== 1) { gml_Script_draw_hd_text_transformed(_i, _o, x + w / 2 + 1 + ox, y + oy + ln[2] * scY, ln[0], s2, s2, 0); }
+        else { gml_Script_draw_hd_text(_i, _o, x + w / 2 + 1 + ox, y + oy + ln[2], ln[0]); }
+    }
+    draw_set_color(16777215);
+    var c = rbGLClicked(x, y, w, h);
+    if (c) rbClickSnd(_i, _o);
+    return c;
+}
 function rbDlBtn(_i, _o, bx, by, bw, bh, lines) {   // same look as the game's boxes; returns true on a tap
     var pr = rbGLClicked(bx, by, bw, bh), mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
     var held = mouse_check_button(1) && mx >= bx && mx <= bx + bw && my >= by && my <= by + bh, ox = held ? -1 : 0, oy = held ? 1 : 0, bg = global.gmlc_background;
@@ -12601,36 +13358,45 @@ function rbDlBtn(_i, _o, bx, by, bw, bh, lines) {   // same look as the game's b
     for (var i = 0; i < lines.length; i++) { draw_set_color(lines[i][1]); gml_Script_draw_hd_text(_i, _o, bx + ox + bw / 2, by + oy + lines[i][2], lines[i][0]); }
     return pr;
 }
-var RB_DL_ORD_PER = 22;   // picks per page on the ORDER panel (2 columns x 11)
+var RB_DL_ORD_PER = 20;   // picks per page on the ORDER panel (2 columns x 10)
+var RB_DL_ORD_SC = 0.78;  // text scale of the ORDER panel
+var RB_DL_ORD_BTN = 0.62; // scale of the buttons inside the ORDER panel
+function rbDlFitS(_i, _o, x, y, txt, maxW, sc) {   // like rbGLFit but drawn at scale sc
+    txt = string(txt);
+    var w = gml_Script_string_hd_width(_i, _o, txt) * sc, s2 = (w > maxW) ? sc * maxW / w : sc;
+    gml_Script_draw_hd_text_transformed(_i, _o, x, y, txt, s2, s2, 0);
+}
 // the ORDER panel: every pick of this round in order, who is on the clock, what has been taken. The draft clock keeps running behind it.
 function rbDlOrderDraw(_i, _o, W, bg, prim) {
-    var order = rbDl.order || [], n = order.length, per = RB_DL_ORD_PER, pages = Math.max(1, Math.ceil(n / per));
+    var order = rbDl.order || [], n = order.length, per = RB_DL_ORD_PER, rows = per / 2, pages = Math.max(1, Math.ceil(n / per)), SC = RB_DL_ORD_SC, RH = 10;
     rbDl.ordPage = Math.max(0, Math.min(pages - 1, Number(rbDl.ordPage) || 0));
-    var pg = rbDl.ordPage, X = 136, Y = 26, PWo = 340, PHo = 196, k, j;
+    var pg = rbDl.ordPage, k, j;
+    var obs = rbSprByName("spr_button_74", rbGetOfferSpr()), obw = sprite_get_width(obs) * RB_DL_ORD_BTN, obh = sprite_get_height(obs) * RB_DL_ORD_BTN;
+    var obh0 = sprite_get_height(obs);
+    var PWo = 250, PHo = Math.round(22 + rows * RH + obh + 8), X = 172, Y = 36;
     draw_set_alpha(1);
-    draw_set_color(W); draw_rectangle(X - 2, Y - 2, X + PWo + 2, Y + PHo + 2, 0);
-    draw_set_color(bg); draw_rectangle(X, Y, X + PWo, Y + PHo, 0);
+    rbDrawBox(_i, X - 2, Y - 2, PWo + 4, PHo + 4, W);   // rounded box like the game's info screens
     draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1); draw_set_color(W);
-    rbGLFit(_i, _o, X + PWo / 2, Y + 9, "DRAFT ORDER  ROUND " + rbDl.round + (pages > 1 ? "   PAGE " + (pg + 1) + "/" + pages : ""), PWo - 20);
-    draw_set_color(W); draw_rectangle(X + 4, Y + 17, X + PWo - 4, Y + 18, 0);
-    var colW = (PWo - 12) / 2;
+    rbDlFitS(_i, _o, X + PWo / 2, Y + 8, "DRAFT ORDER  ROUND " + rbDl.round + (pages > 1 ? "   PAGE " + (pg + 1) + "/" + pages : ""), PWo - 16, SC);
+    draw_set_color(W); draw_rectangle(X + 4, Y + 14, X + PWo - 4, Y + 15, 0);
+    var colW = (PWo - 10) / 2;
     draw_set_halign(0);
     for (k = 0; k < per; k++) {
         j = pg * per + k; if (j >= n) { break; }
-        var s = order[j], col = Math.floor(k / 11), row = k % 11, tx = X + 6 + col * colW, ty = Y + 29 + row * 13;
+        var s = order[j], col = Math.floor(k / rows), row = k % rows, tx = X + 5 + col * colW, ty = Y + 24 + row * RH;
         var cur = (j === rbDl.idx), done = (j < rbDl.idx);
-        if (cur) { draw_set_color(prim); draw_rectangle(tx - 2, ty - 6, tx - 1, ty + 6, 0); }
+        if (cur) { draw_set_color(prim); draw_rectangle(tx - 2, ty - 4, tx - 1, ty + 4, 0); }
         draw_set_alpha(done ? 0.55 : 1);
         draw_set_color((cur || s.me) ? prim : W);
-        rbGLFit(_i, _o, tx + 2, ty, "#" + (j + 1) + " " + (s.me ? "YOU" : rbDlNick(s.ti)) + (s.txt ? "  " + s.txt : ""), colW - 10);
+        rbDlFitS(_i, _o, tx + 2, ty, "#" + (j + 1) + " " + (s.me ? "YOU" : rbDlNick(s.ti)) + (s.txt ? "  " + s.txt : ""), colW - 8, SC);
         draw_set_alpha(1);
     }
-    var bY = Y + PHo - 24;
+    var bY = Y + PHo - obh - 4;
     draw_set_halign(1);
-    if (rbDlBtn(_i, _o, X + PWo / 2 - 36, bY, 72, 19, [["CLOSE", W, 9]]) || keyboard_check_pressed(27)) { global.rbDlOrderOpen = false; global.rbBjCool = 4; return; }
+    if (rbDlSprBtn(_i, _o, X + PWo / 2 - obw / 2, bY, obs, [["CLOSE", W, obh0 / 2 - 1]], RB_DL_ORD_BTN) || keyboard_check_pressed(27)) { global.rbDlOrderOpen = false; global.rbBjCool = 4; return; }
     if (pages > 1) {
-        if (rbDlBtn(_i, _o, X + 8, bY, 64, 19, [["PREV", W, 9]])) { rbDl.ordPage = (pg + pages - 1) % pages; }
-        if (rbDlBtn(_i, _o, X + PWo - 72, bY, 64, 19, [["NEXT", W, 9]])) { rbDl.ordPage = (pg + 1) % pages; }
+        if (rbDlSprBtn(_i, _o, X + 6, bY, obs, [["PREV", W, obh0 / 2 - 1]], RB_DL_ORD_BTN)) { rbDl.ordPage = (pg + pages - 1) % pages; }
+        if (rbDlSprBtn(_i, _o, X + PWo - obw - 6, bY, obs, [["NEXT", W, obh0 / 2 - 1]], RB_DL_ORD_BTN)) { rbDl.ordPage = (pg + 1) % pages; }
     }
 }
 function rbDlDraw(_i, _o) {
@@ -12638,13 +13404,12 @@ function rbDlDraw(_i, _o) {
     try {
         if (g_pBuiltIn.get_current_room() !== 5) { return; }
         if (yyGetBool(instance_exists(104))) { return; }
-        if (rbBjBlocking() && global.rbDlOrderOpen !== true) { return; }   // Teams page etc. is on top
+        if ((global.rbBjOpen === true || global.rbConOpen === true || global.rbLogOpen === true || global.rbTmOpen === true || global.rbPrOpen === true || global.rbCdOpen === true) && global.rbDlOrderOpen !== true) { return; }   // Teams page etc. is on top
         var g = yyInst(_i, _o, 97), W = 16777215, bg = global.gmlc_background, prim = global.gmlc_primary;
         var order = rbDl.order || [], slot = order[rbDl.idx], me = !!(slot && slot.me), ti = slot ? slot.ti : -1;
         var PX = 4, PY = 26, PW = 126, PH = 196, cx = PX + PW / 2, i;
         draw_set_alpha(1);
-        draw_set_color(W); draw_rectangle(PX - 2, PY - 2, PX + PW + 2, PY + PH + 2, 0);
-        draw_set_color(bg); draw_rectangle(PX, PY, PX + PW, PY + PH, 0);
+        rbDrawBox(_i, PX - 2, PY - 2, PW + 4, PH + 4, W);   // rounded box like the game's info screens
         draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1); draw_set_halign(1);
         // who is on the clock
         var myName = ""; try { myName = String(ds_map_find_value(g.gmlmyteam, "name")).toUpperCase(); } catch (_e) {}
@@ -12676,7 +13441,8 @@ function rbDlDraw(_i, _o) {
         }
         if (!shown) { draw_set_halign(1); draw_set_color(W); rbGLFit(_i, _o, cx, PY + 128, "NO PICKS YET", PW - 10); }
         // speed button (locked at x1 while it is your pick)
-        if (rbDlBtn(_i, _o, PX + 6, PY + PH - 22, PW - 12, 17, [["SPEED  x" + rbDl.speed, W, 9]]) && global.rbDlOrderOpen !== true && !me) {
+        var spdSpr = rbSprByName("spr_button_104", rbGetOfferSpr()), spdSw = sprite_get_width(spdSpr), spdSh = sprite_get_height(spdSpr);
+        if (rbDlSprBtn(_i, _o, PX + 6, PY + PH - 22, spdSpr, [["SPEED  x" + rbDl.speed, W, 3.5 / (17 / spdSh)]], (PW - 12) / spdSw, 17 / spdSh, 1) && global.rbDlOrderOpen !== true && !me && !(global.rbBjCool > 0)) {
             rbDl.speedI = (rbDl.speedI + 1) % RB_DL_SPEEDS.length; rbDl.speed = RB_DL_SPEEDS[rbDl.speedI];
         }
         if (global.rbDlOrderOpen === true) {
@@ -12688,17 +13454,25 @@ function rbDlDraw(_i, _o) {
         var cardH = 66; try { cardH = (Number(sprite_get_height(172)) || 88) * RB_DL_SC; } catch (_e) {}
         var bY = Math.max(168, Math.min(PY + PH - 24, Math.round(rbDlGy0() + rbDlDy() + cardH + 6)));
         draw_set_font(global.gmlfnt_small_flex);
-        if (rbDlBtn(_i, _o, 168, bY, 84, 22, [["ORDER", W, 11]])) {
+        var sprOrd = rbSprByName("spr_button_74", rbGetOfferSpr()), sprCpu = rbSprByName("spr_button_104", rbGetOfferSpr());
+        var ordW = sprite_get_width(sprOrd), btnH = sprite_get_height(sprOrd);
+        if (rbDlSprBtn(_i, _o, 168, bY, sprOrd, [["ORDER", W, btnH / 2 - 1]]) && !(global.rbBjCool > 0)) {
             rbDl.ordPage = Math.floor(Math.max(0, rbDl.idx) / RB_DL_ORD_PER); global.rbDlOrderOpen = true; return;
         }
-        if (rbDlBtn(_i, _o, 260, bY, 122, 22, [["CPU ROSTERS", W, 11]])) {
+        if (rbDlSprBtn(_i, _o, 168 + ordW + 8, bY, sprCpu, [["CPU ROSTERS", W, btnH / 2 - 1]]) && !(global.rbBjCool > 0)) {
             try { rbDlFlush(); } catch (_e) {}   // the Teams page reads the saved rosters, so write this round's picks first
             try { rbTeams(_i, _o); } catch (_e) { try { console.error("teams open error", _e); } catch (_x) {} }
             return;
         }
+        // SCOUT / FAV filter buttons: same row as ORDER and CPU ROSTERS, same square button as SORT (rebuilt in the step event, like SORT)
+        var sqSpr = rbSprByName("spr_button_32", 129), fx0 = 168 + ordW + 8 + sprite_get_width(sprCpu) + 8;
+        if (global.rbDrObj) {
+            if (rbDlSprBtn(_i, _o, fx0, bY, sqSpr, [["SCOUT", W, 11], [["ALL", "ONLY", "NOT"][rbDrScF], prim, 23]]) && !(global.rbBjCool > 0)) { global.rbDlFiltReq = 1; }
+            if (rbDlSprBtn(_i, _o, fx0 + sprite_get_width(sqSpr) + 6, bY, sqSpr, [["FAV", W, 11], [rbDrFavF ? "ONLY" : "ALL", rbDrFavF ? 55295 : prim, 23]]) && !(global.rbBjCool > 0)) { global.rbDlFiltReq = 2; }
+        }
         // sort button (the old one only shows with full-size cards)
         if (global.rbDrObj) {
-            if (rbDlBtn(_i, _o, 8, 232, 33, 32, [["SORT", W, 10], [rbDraftSortLabel(_i, _o), prim, 22]])) {
+            if (rbDlSprBtn(_i, _o, 8, 232, rbSprByName("spr_button_32", 129), [["SORT", W, 11], [rbDraftSortLabel(_i, _o), prim, 23]]) && !(global.rbBjCool > 0)) {
                 global.rbDlSortReq = true;   // the cards are rebuilt in the step event (rbDlTick), never inside the draw event
             }
         }
@@ -12706,12 +13480,30 @@ function rbDlDraw(_i, _o) {
     } catch (_e) { try { console.error("live draft draw error", _e); } catch (_x) {} try { draw_set_halign(0); draw_set_color(16777215); draw_set_alpha(1); } catch (_x) {} }
 }
 
+function rbDlViewSize(L) {
+    var n = ds_list_size(L);
+    try {
+        if (!rbDlOn() || (rbDrMode < 2 && !rbDrScF && !rbDrFavF)) { return n; }
+        var P = rbDraftPositions(L), tgt = (rbDrMode >= 2 && P[rbDrMode - 2] !== undefined) ? P[rbDrMode - 2] : -1;
+        var c = 0;
+        for (var i = 0; i < n; i++) { if (rbDrPass(ds_list_find_value(L, i), tgt)) { c++; } }
+        return c;
+    } catch (_e) { return n; }
+}
+function rbDlViewFix(_i, _o) {
+    try {
+        if (!rbDlOn()) { return; }
+        var M = yyInst(_i, _o, 97), mx = Math.max(1, Math.ceil(rbDlViewSize(M.gmldraftlist) / 10));
+        _i.gmlpage_max = mx;
+        M.gmldraft_page = Math.max(1, Math.min(mx, Number(M.gmldraft_page) || 1));
+    } catch (_e) {}
+}
 function rbDraftSetup(_inst, _other) {
     try { rbDlEnter(_inst, _other); } catch (_e) {}
     try {        global.rbDrRoom = _inst; global.rbDrObj = yyInst(_inst, _other, 97);
         var L = global.rbDrObj.gmldraftlist, n = ds_list_size(L);
         if (n < 1) return;
-        if (ds_map_exists(ds_list_find_value(L, 0), "draft_rank")) { if (rbDrMode !== 1 && !(rbDl && rbDl.keepSort)) { rbDraftApplySort(global.rbDrObj, global.rbDrObj); } return; }
+        if (ds_map_exists(ds_list_find_value(L, 0), "draft_rank")) { if ((rbDrMode !== 1 || rbDrScF || rbDrFavF) && !(rbDl && rbDl.keepSort)) { rbDraftApplySort(global.rbDrObj, global.rbDrObj); } return; }
         var a = [], i;
         for (i = 0; i < n; i++) a.push(ds_list_find_value(L, i));
         var rt = function (p) { return ds_map_exists(p, "sv") ? ds_map_find_value(p, "sv") : gml_Script_s_get_player_rating(_inst, _other, p); };
@@ -12734,9 +13526,10 @@ function rbDraftApplySort(_inst, _other) {
     var tgt = rbDrMode >= 2 ? P[rbDrMode - 2] : -1;
     var rk = function (p) { return ds_map_find_value(p, "draft_rank"); };
     var ps = function (p) { return ds_map_find_value(p, "position"); };
+    var pf = new Map(); for (i = 0; i < a.length; i++) { pf.set(a[i], rbDrPass(a[i], tgt) ? 0 : 1); }   // 0 = passes the position / SCOUT / FAV view -> goes first
     a.sort(function (x, y) {
+        var fx = pf.get(x), fy = pf.get(y); if (fx !== fy) return fx - fy;
         if (rbDrMode === 1) { if (ps(x) !== ps(y)) return ps(x) - ps(y); }
-        else if (rbDrMode >= 2) { var ax = ps(x) === tgt ? 0 : 1, ay = ps(y) === tgt ? 0 : 1; if (ax !== ay) return ax - ay; }
         return rk(x) - rk(y);
     });
     ds_list_clear(L);
@@ -12764,17 +13557,7 @@ function rbDraftRankDraw(_inst, _other, btn, cardSc) {
             matrix_set(2, matrix_build(0, 0, 0, 0, 0, 0, 1, 1, 1));
         }
         if (btn === true && global.rbDrCard == _inst.id && global.rbDrObj) {
-            var bx = 8, by = 232, bw = 33, bh = 32;
-            var pr = rbGLClicked(bx, by, bw, bh);
-            var held = mouse_check_button(1) && device_mouse_x_to_gui(0) >= bx && device_mouse_x_to_gui(0) <= bx + bw && device_mouse_y_to_gui(0) >= by && device_mouse_y_to_gui(0) <= by + bh;
-            var ox = held ? -2 : 0, oy = held ? 2 : 0, bg = global.gmlc_background;
-            if (!held) { draw_set_alpha(0.35); draw_rectangle_color(bx - 3, by + 3, bx + bw - 3, by + bh + 3, 0, 0, 0, 0, false); draw_set_alpha(1); }
-            draw_rectangle_color(bx + ox, by + oy, bx + ox + bw, by + oy + bh, 16777215, 16777215, 16777215, 16777215, false);
-            draw_rectangle_color(bx + ox + 2, by + oy + 2, bx + ox + bw - 2, by + oy + bh - 2, bg, bg, bg, bg, false);
-            draw_set_color(16777215); draw_set_halign(1);
-            gml_Script_draw_hd_text(_inst, _other, bx + ox + bw / 2, by + oy + 10, "SORT");
-            draw_set_color(global.gmlc_primary);
-            gml_Script_draw_hd_text(_inst, _other, bx + ox + bw / 2, by + oy + 22, rbDraftSortLabel(_inst, _other));
+            var pr = rbDlSprBtn(_inst, _other, 8, 232, rbSprByName("spr_button_32", 129), [["SORT", 16777215, 11], [rbDraftSortLabel(_inst, _other), global.gmlc_primary, 23]]);
             if (pr) {
                 var np = rbDraftPositions(global.rbDrObj.gmldraftlist).length;
                 rbDrMode = (rbDrMode + 1) % (np + 2);
@@ -12925,7 +13708,7 @@ _other){_inst.gmldraw_box=false;}function gml_RoomCC_rm_pre_match_5_PreCreate(_i
 }function gml_RoomCC_rm_pre_match_14_Create(_inst,_other){if(yyfequal(gml_Script_s_is_co_mode(_inst,_inst),false)){{_inst.visible=false;};};gml_Script_s_refresh_btn_overtime_text(_inst,_inst);}function gml_RoomCC_rm_pre_match_14_PreCreate(_inst,_other){_inst.gmltext="DEBUG OT";_inst.gmlcontinue_icon=147;_inst.gmlonClickAction=kgml_Script_btn_click_toggle_college_overtime_debug;}function gml_Room_rm_profile_player_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),
 global.gmlc_background);}function gml_RoomCC_rm_profile_player_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_PlayerProfile");}function gml_RoomCC_rm_profile_player_1_PreCreate(_inst,_other){_inst.gmlhalign=0;_inst.gmldraw_box=false;}function gml_RoomCC_rm_profile_player_2_PreCreate(_inst,_other){_inst.gmldraw_box=false;_inst.gmlhalign=0;}function gml_RoomCC_rm_profile_player_3_PreCreate(_inst,_other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_Details");}function gml_RoomCC_rm_profile_player_4_PreCreate(_inst,
 _other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_Attributes");}function gml_RoomCC_rm_profile_player_8_PreCreate(_inst,_other){_inst.gmlhalign=0;_inst.gmldraw_box=false;}function gml_RoomCC_rm_profile_player_9_PreCreate(_inst,_other){_inst.gmldraw_box=false;}function gml_RoomCC_rm_profile_player_10_PreCreate(_inst,_other){_inst.gmldraw_box=false;_inst.gmlhalign=0;}function gml_RoomCC_rm_profile_player_11_PreCreate(_inst,_other){_inst.gmldraw_box=false;_inst.gmlfont=2;_inst.gmlshadow=true;}function gml_RoomCC_rm_profile_player_13_PreCreate(_inst,
-_other){_inst.gmldraw_box=false;}function gml_RoomCC_rm_profile_player_15_PreCreate(_inst,_other){_inst.gmlimage=146;_inst.gmlonClickAction=kgml_Script_btn_click_ProfileNext;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32774;}function gml_RoomCC_rm_profile_player_16_PreCreate(_inst,_other){_inst.gmlimage=144;_inst.gmlonClickAction=kgml_Script_btn_click_ProfilePrev;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32773;}function gml_RoomCC_rm_profile_player_17_PreCreate(_inst,_other){_inst.gmltext="Log";_inst.gmlonClickAction=function(_i,_o){rbGameLogOpen();};}function gml_RoomCC_rm_profile_player_18_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Meeting");_inst.gmlgoto_room=28;}function gml_RoomCC_rm_profile_player_19_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Sign");_inst.gmlonClickAction=kgml_Script_btn_click_Profile_Pick;}function gml_RoomCC_rm_profile_player_20_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
+_other){_inst.gmldraw_box=false;}function gml_RoomCC_rm_profile_player_15_PreCreate(_inst,_other){_inst.gmlimage=146;_inst.gmlonClickAction=kgml_Script_btn_click_ProfileNext;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32774;}function gml_RoomCC_rm_profile_player_16_PreCreate(_inst,_other){_inst.gmlimage=144;_inst.gmlonClickAction=kgml_Script_btn_click_ProfilePrev;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32773;}function gml_RoomCC_rm_profile_player_17_PreCreate(_inst,_other){_inst.gmltext="Log";_inst.gmlonClickAction=function(_i,_o){rbGameLogOpen();};}function gml_RoomCC_rm_profile_player_18_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Meeting");_inst.gmlgoto_room=28;}function gml_RoomCC_rm_profile_player_19_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Sign");_inst.gmlonClickAction=kgml_Script_btn_click_Profile_Pick;try{var _M=yyInst(_inst,_inst,97);if(ds_list_find_index(_M.gmlfreeagentlist,_M.gmlplayer_profile)>=0||(ds_list_find_index(_M.gmlstorelist,_M.gmlplayer_profile)>=0&&yyGetBool(ds_map_exists(_M.gmlplayer_profile,"cutid")))){_inst.gmltext="Negotiate";_inst.gmlonClickAction=function(_i,_o){rbNegOpen(_i,_o);};}}catch(_e){}}function gml_RoomCC_rm_profile_player_20_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
 _inst,"attribute_Catching");_inst.gmlonClickAction=kgml_Script_btn_click_AddSkill;}function gml_RoomCC_rm_profile_player_21_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"attribute_Speed");_inst.gmlonClickAction=kgml_Script_btn_click_AddSpeed;}function gml_RoomCC_rm_profile_player_22_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"attribute_Strength");_inst.gmlonClickAction=kgml_Script_btn_click_AddStrength;}function gml_RoomCC_rm_profile_player_23_PreCreate(_inst,
 _other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"attribute_Stamina");_inst.gmlonClickAction=kgml_Script_btn_click_AddStamina;}function gml_RoomCC_rm_profile_player_24_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Continue");_inst.gmlonClickAction=kgml_Script_btn_click_XP_Continue;}function gml_RoomCC_rm_profile_player_25_PreCreate(_inst,_other){_inst.gmlhalign=0;_inst.gmldraw_box=false;}function gml_RoomCC_rm_profile_player_26_PreCreate(_inst,_other){_inst.gmlhalign=0;_inst.gmldraw_box=false;
 _inst.gmlflashtext=true;}function gml_RoomCC_rm_profile_player_27_PreCreate(_inst,_other){_inst.gmlinfo_msg="info_Position";}function gml_RoomCC_rm_profile_player_28_PreCreate(_inst,_other){_inst.gmlinfo_msg="info_Skills";}function gml_RoomCC_rm_profile_player_29_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_get_credit(_inst,_inst);_inst.gmlicon=105;}function gml_RoomCC_rm_profile_player_30_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Stats");_inst.gmlonClickAction=kgml_Script_btn_click_Profile_Stats;
@@ -14615,7 +15398,7 @@ _yj){var _kV=_qR._d6(yyGetInt32(_25));if(_kV===null)return;_kV._I31.width=yyGetI
 };_sz=_M31[_L31];}_sz._N31=yyGetInt32(_O31);}}function room_get_viewport(_K31,_L31){var __4=[];__4[0]=0;__4[1]=0;__4[2]=0;__4[3]=640;__4[4]=480;var _kV=_qR._d6(yyGetInt32(_K31));if(_kV){var _M31=_kV._I31.views;if(_M31){var _sz=_M31[yyGetInt32(_L31)];if(_sz){if(_sz.visible!==undefined)__4[0]=_sz.visible;if(_sz.xport!==undefined)__4[1]=_sz.xport;if(_sz.yport!==undefined)__4[2]=_sz.yport;if(_sz.wport!==undefined)__4[3]=_sz.wport;if(_sz.hport!==undefined)__4[4]=_sz.hport;return __4;}}}__4[0]=0;__4[1]=0;__4[2]=0;
 __4[3]=0;__4[4]=0;return __4;}function room_set_viewport(_K31,_L31,_P31,_Q31,_R31,_S31,_T31){_L31=yyGetInt32(_L31);var _kV=_qR._d6(yyGetInt32(_K31));if(_kV){if(_kV._I31){var _sz=_kV._I31.views;if(!_sz){_kV._I31.views=[];for(var i=0;i<8;i++){_kV._I31.views[i]={};}}_sz=_sz[_L31];if(_sz===undefined){_sz[_L31]={};_sz=_sz[_L31];}_sz.visible=yyGetBool(_P31);_sz.xport=yyGetInt32(_Q31);_sz.yport=yyGetInt32(_R31);_sz.wport=yyGetInt32(_S31);_sz.hport=yyGetInt32(_T31);}}}function room_set_view_enabled(_25,_a4){var _kV=_qR._d6(yyGetInt32(_25));
 if(_kV){_kV._I31.enableViews=yyGetBool(_a4);}}function room_add(){var _kV=new _U31();_kV._V31();_qR._Of(_kV);return _kV.id;}function room_duplicate(_25){_25=yyGetInt32(_25);var _kV=_qR._d6(_25);if(!_kV){debug("Trying to duplicate non-existent room.");return 0;}return _qR._W31(_25);}function room_assign(_25,_Ko){_25=yyGetInt32(_25);_Ko=yyGetInt32(_Ko);if(_qR._d6(_25)&&_qR._d6(_Ko)){_qR._X31(_25,_Ko);return true;}return false;}function room_instance_add(_25,_06,_16,_2l){var _kV=_qR._d6(yyGetInt32(_25));if(_kV){
-var instance_id=_0O++;var _0V=_kV._I31.pInstances.length;_kV._I31.pInstances[_0V]={x:yyGetReal(_06),y:yyGetReal(_16),index:yyGetInt32(_2l),id:instance_id};return instance_id;}return 0;}function room_instance_clear(_25){var _kV=_qR._d6(yyGetInt32(_25));if(_kV){_kV._Y31();}}function room_goto_next(){if((_24._Z31+1)>=_qR.__31.length)return;_041=_qR._141(_24._Z31+1).id;}function room_restart(){_041=_24.id;};function room_goto(_Ko){_Ko=yyGetInt32(_Ko);var _241=_qR._d6(_Ko);if((_241==null)||(_241==undefined)){_Mi("Error: Room "+_Ko+" is not a valid room index");
+var instance_id=_0O++;var _0V=_kV._I31.pInstances.length;_kV._I31.pInstances[_0V]={x:yyGetReal(_06),y:yyGetReal(_16),index:yyGetInt32(_2l),id:instance_id};return instance_id;}return 0;}function room_instance_clear(_25){var _kV=_qR._d6(yyGetInt32(_25));if(_kV){_kV._Y31();}}function room_goto_next(){if((_24._Z31+1)>=_qR.__31.length)return;_041=_qR._141(_24._Z31+1).id;}function room_restart(){_041=_24.id;};function room_goto(_Ko){_Ko=yyGetInt32(_Ko);try{if(typeof rbDlGuardRoom==="function"){var _gr=rbDlGuardRoom(_Ko);if(_gr===-1){return;}_Ko=_gr;}}catch(_e){}var _241=_qR._d6(_Ko);if((_241==null)||(_241==undefined)){_Mi("Error: Room "+_Ko+" is not a valid room index");
 }else {_041=_Ko;}};function room_goto_previous(){if((_24._Z31-1)<0)return;_041=_qR._141(_24._Z31-1).id;};function room_previous(_pH){var _kl=-1;for(var i=0;i<_qR._341.length;i++){if(_qR._341[i]==yyGetInt32(_pH))return _kl;_kl=_qR._341[i];}return -1;};function room_next(_pH){for(var i=0;i<(_qR._341.length-1);i++){if(_qR._341[i]==yyGetInt32(_pH)){return _qR._341[i+1];}}return -1;};function game_end(){_041=_441;if(_G31==false){_G31=true;if(typeof(gmlGameEndScripts)=="function"){gmlGameEndScripts();}}if(!_H31){
 if(arguments.length>0)show_debug_message("###game_end###"+arguments[0]);else show_debug_message("###game_end###0");_H31=true;}}function game_restart(){g_pBuiltIn.score=0;g_pBuiltIn.lives=0;g_pBuiltIn.health=100;_041=_541;}function _641(_a4){var _741=null;if(typeof(_a4)=="object"){return _a4;}else {var _841=yyGetInt32(_a4);_741=_CR._KU(_841);}return _741;}function sequence_create(){var _741=_CR._941();if(_741==null){_g5("sequence_create() - could not create new sequence");}else {return _741;}return -1;}function sequence_destroy(_a41){
 if(arguments.length!=1){_g5("sequence_destroy() - requires a sequence ID or object");}var _741=_641(_a41);if(_741==null){_g5("sequence_destroy() - specified sequence not valid");}else if(_741._Rr==true){_g5("sequence_destroy() - can't delete a sequence created in the IDE");}else {_CR._b41(_741);}}function sequence_get(_c41){if(arguments.length!=1){_g5("sequence_get() - requires a sequence ID");}var _741=_641(_c41);if(_741==null){_g5("sequence_get() - specified sequence not valid");}else {return _741;}}
