@@ -712,29 +712,31 @@ function rbFieldTxt(_inst,_other,txt){
 }
 function rbTruckBreak(tp,_inst,_other,dt){
     rbTruck.brk = Math.max(0, (rbTruck.brk || 0) - dt);
-    if (!(rbN(tp.gmltackling) >= 0)){ rbTruck.sh = rbN(tp.hspeed); rbTruck.sv = rbN(tp.vspeed); }
-    else if (rbTruck.sh !== undefined){ tp.hspeed = rbTruck.sh; tp.vspeed = rbTruck.sv; }
-    if (rbTruck.brk > 0) return;
     var did = tp.gmltackling;
-    if (!(rbN(did) >= 0)) return;
+    if (!(rbN(did) >= 0)){ rbTruck.sh = rbN(tp.hspeed); rbTruck.sv = rbN(tp.vspeed); rbTruck.ss = rbN(tp.speed); return; }   // not engaged: remember his full speed
     var d = yyInst(_inst,_other,did);
     if (!d || rbN(d.gmldead) > 0 || rbN(d.gmloffense) > 0) return;
     var dirx = (rbN(tp.hspeed) >= 0) ? 1 : -1;
-    if ((rbN(d.x) - rbN(tp.x)) * dirx < -2) return;
+
     var str = 5;
     try{ str = rbN(gml_Script_s_get_attribute(_inst,_other,tp.gmlpmap,"strength")); }catch(e){}
     if (!(str >= 0)) str = 5;
-    var rate = 300 + str * 30;
     var nowT = performance.now();
-if (rbTruck.rollFor !== did || nowT - (rbTruck.rollT || 0) > 1500){ rbTruck.rollFor = did; rbTruck.rollT = nowT; rbTruck.rollOk = Math.random() < Math.min(1, 0.8 + 0.01 * str); }
-if (!rbTruck.rollOk) return;
+    if (rbTruck.rollFor !== did || nowT - (rbTruck.rollT || 0) > 1500){ rbTruck.rollFor = did; rbTruck.rollT = nowT; rbTruck.rollOk = Math.random() < Math.min(1, 0.8 + 0.01 * str); }
+
+    // Roll failed: this is a real tackle, so do not touch his speed and let the game stop him.
+    if (!rbTruck.rollOk) return;
+
+    // Roll succeeded: he breaks the tackle and keeps his full momentum.
+    if (rbTruck.sh !== undefined){ tp.hspeed = rbTruck.sh; tp.vspeed = rbTruck.sv; tp.speed = rbTruck.ss; }
+    if (rbTruck.brk > 0) return;
     rbTruck.brk = 0;
     rbFieldTxt(tp,_other,"TRUCK!");
     try{ gml_Script_s_sound_audience_catch(_inst,_other); }catch(e){}
     d.vspeed = (rbN(tp.y) < rbN(d.y)) ? 1.5 : -1.5;
     gml_Script_s_set_anim(d,tp,4);
     tp.gmltacklecount = 0; tp.gmltackling = -4; d.gmltackling = -4;
-        if (rbTruck.sh !== undefined){ tp.hspeed = rbTruck.sh; tp.vspeed = rbTruck.sv; }
+    if (rbTruck.sh !== undefined){ tp.hspeed = rbTruck.sh; tp.vspeed = rbTruck.sv; tp.speed = rbTruck.ss; }
 }
 function rbTruckTick(_inst,_other){
     try{
@@ -1562,8 +1564,8 @@ function rbGameLogMakeBtn(_inst, _other) {
 // profile: clicking the Attributes box flips it to a "Development Trait" box (empty for now); click again to flip back
 var RB_DEV_HIDE = [100438, 100439, 100440, 100444, 100450, 100452, 100453, 100454];
 // how small the DEV TRAIT box gets on every profile screen (fraction of the Attributes/Skills box size, and GUI px inset per side on the Prospects/Teams screens)
-var RB_DEV_SCALE_X = 0.55, RB_DEV_SCALE_Y = 0.7;
-var RB_DEV_INSET_X = 50, RB_DEV_INSET_Y = 26;
+var RB_DEV_SCALE_X = 0.7, RB_DEV_SCALE_Y = 0.85;
+var RB_DEV_INSET_X = 34, RB_DEV_INSET_Y = 20;
 function rbDevTraitSync(_inst, _other) {
     try {
         var box = yyInst(_inst, _other, 100432);
@@ -1577,6 +1579,9 @@ function rbDevTraitSync(_inst, _other) {
         var pmx = _inst.gmlpmap;
         if (yyGetBool(gml_Script_s_is_staff(_inst, _other, ds_map_find_value(pmx, "position")))) return;   // coaches/staff have no dev trait
         // players from older saves: yours without a trait become normal, anyone else gets one rolled from potential
+        // switched to another player (arrows): close the dev view right away so the old gem never lingers
+        if (_inst.rbDevPm !== undefined && _inst.rbDevPm !== pmx && _inst.rbDevView) rbDevTraitSet(_inst, _other, box, false);
+        _inst.rbDevPm = pmx;
         rbDevGetTrait(_inst, _other, pmx);
         var bw = box.sprite_width, bh = box.sprite_height;
         if (_inst.rbDevView) rbDevShow(_inst, _other, box);
@@ -1586,20 +1591,23 @@ function rbDevTraitSync(_inst, _other) {
         }
     } catch (e) {}
 }
-// ---- dev trait: 0 = normal (brown), 1 = star (silver), 2 = superstar (gold); stored on the player map as "dev_trait"
-var RB_DEV_TILE = [0, 2, 3];   // tile index in html5game/dev.png (24px tiles): brown, silver, gold
+// ---- dev trait: 0 = normal (brown), 1 = star (silver), 2 = superstar (gold), 3 = x factor (red); stored on the player map as "dev_trait"
+var RB_DEV_TILE = [0, 2, 3, 5];   // tile index in html5game/dev.png (24px tiles): brown, silver, gold, x factor red
 // odds of a newly generated player's trait by potential (index = potential 0..12 from s_get_player_potential); tune these to taste
-var RB_DEV_STAR  = [0, .06, .10, .15, .21, .28, .35, .42, .48, .52, .55, .57, .58];
-var RB_DEV_SUPER = [0,   0, .005, .02, .04, .06, .09, .13, .18, .24, .30, .34, .37];
-// xp per game multiplier by dev trait: normal 1x, star 1.5x, superstar 2x
-var RB_DEV_XP_MULT = [1, 1.5, 2];
+var RB_DEV_STAR  = [0, .06, .10, .15, .21, .28, .35, .42, .48, .52, .55, .32, .24];
+var RB_DEV_SUPER = [0,   0, .005, .02, .04, .06, .09, .13, .18, .24, .30, .45, .35];
+// x factor: rarer than superstar, only from the top potentials
+var RB_DEV_XF    = [0, 0, 0, 0, .005, .008, .012, .016, .02, .024, .12, .20, .40];
+// xp per game multiplier by dev trait: normal 1x, star 1.5x, superstar 2x, x factor 3x
+var RB_DEV_XP_MULT = [1, 1.5, 2, 3];
 function rbDevXpMult(pm) { try { return RB_DEV_XP_MULT[rbDevEnsure(pm)] || 1; } catch (e) { return 1; } }
 function rbDevRoll(_inst, _other, pm) {
     try {
         var pot = Math.max(0, Math.min(12, Math.round(Number(gml_Script_s_get_player_potential(_inst, _other, pm)))));
         var r = Math.random(), t = 0;
-        if (r < RB_DEV_SUPER[pot]) t = 2;
-        else if (r < RB_DEV_SUPER[pot] + RB_DEV_STAR[pot]) t = 1;
+        if (r < RB_DEV_XF[pot]) t = 3;
+        else if (r < RB_DEV_XF[pot] + RB_DEV_SUPER[pot]) t = 2;
+        else if (r < RB_DEV_XF[pot] + RB_DEV_SUPER[pot] + RB_DEV_STAR[pot]) t = 1;
         ds_map_set(pm, "dev_trait", t);
         return t;
     } catch (e) { ds_map_set(pm, "dev_trait", 0); return 0; }
@@ -1620,7 +1628,7 @@ function rbDevEnsure(pm) {
         if (pm === undefined || pm === null || pm < 0 || !yyGetBool(ds_exists(pm, 1))) return 0;
         if (!yyGetBool(ds_map_exists(pm, "dev_trait"))) ds_map_set(pm, "dev_trait", 0);
         var v = Math.round(Number(ds_map_find_value(pm, "dev_trait")));
-        if (!(v >= 0 && v <= 2)) { v = 0; ds_map_set(pm, "dev_trait", 0); }
+        if (!(v >= 0 && v <= 3)) { v = 0; ds_map_set(pm, "dev_trait", 0); }
         return v;
     } catch (e) { return 0; }
 }
@@ -1665,11 +1673,11 @@ var rbDevLast = 0;
 var rbDevShownFrame = false;   // set when the gem is drawn this frame; cleared each frame in rbGameLogRoom
 // gem + label layout inside a box (GUI coords): title on top, gem centred, label under the gem
 function rbDevLayout(x, y, w, h) {
-    var gs = Math.max(1, Math.floor(Math.min(w - 10, h - 50) / 24));   // whole-number scale of the 24px tile, as big as fits between the title and the label
-    var size = 24 * gs, top = y + 26, bot = y + h - 26;
+    var size = Math.max(24, Math.floor(Math.min(w - 10, h - 50)));   // as big as fits between the title and the label (the tile is scaled to fill the box)
+    var top = y + 26, bot = y + h - 26;
     return { gx: x + (w - size) / 2, gy: top + (bot - top - size) / 2, size: size, lx: x + w / 2, ly: y + h - 21 };
 }
-var RB_DEV_NAME = ["NORMAL DEV", "STAR DEV", "SUPERSTAR DEV"];
+var RB_DEV_NAME = ["NORMAL DEV", "STAR DEV", "SUPERSTAR DEV", "X FACTOR DEV"];
 // what the gem shows for a player (the real trait is always stored on him):
 //  your roster/IR -> real; CPU-team players, free agents, unscouted prospects -> locked; scouted prospects -> real if normal, blue "?" if star/superstar
 function rbDevFace(_i, _o, pm) {
@@ -1696,9 +1704,12 @@ function rbDevLabel(_i, _o, lx, ly, pm) {
     } catch (e) {}
 }
 // draw the player's gem big inside a box given in GUI coords (x, y, w, h); returns where its label goes
+// the gem is an HTML overlay above the canvas, so it would draw over popups (e.g. the sign confirm); hide it while one is open
+function rbDevPopupOpen() { try { return !!instance_exists(78); } catch (e) { return false; } }
 function rbDevShowRect(_inst, _other, x, y, w, h, pm) {
     var L = rbDevLayout(x, y, w, h);
     var el = rbDevElGet(); if (!el) return L;
+    if (rbDevPopupOpen()) { el.style.display = "none"; return L; }
     var c = document.getElementById("canvas"), r = c.getBoundingClientRect();
     var gw = display_get_gui_width(), gh = display_get_gui_height();
     if (!(r.width > 0) || !(gw > 0)) { el.style.display = "none"; return L; }
@@ -1707,7 +1718,7 @@ function rbDevShowRect(_inst, _other, x, y, w, h, pm) {
     var W = L.size * sx;
     el.style.width = W + "px"; el.style.height = (L.size * sy) + "px";
     el.style.left = (r.left + L.gx * sx) + "px"; el.style.top = (r.top + L.gy * sy) + "px";
-    el.style.backgroundSize = (W * 5) + "px " + (L.size * sy) + "px";
+    el.style.backgroundSize = (W * 6) + "px " + (L.size * sy) + "px";
     el.style.backgroundPosition = (-tile * W) + "px 0px";
     el.style.display = "block";
     rbDevLast = performance.now();
@@ -2646,6 +2657,7 @@ function rbSubDraw(_inst, _other) {
 }
 // ---- Scoreboard colours: loaded from scoreboard.txt the same way as uniforms_default.txt ----
 var rbScoreboardHex = {};
+var rbScoreboardTla = {};   // same colours keyed by the 3-letter team code (dots removed), so a team can be found without its uid
 function rbScoreboardPal(_inst, _other, uid) {
     if (Object.keys(rbScoreboardHex).length === 0) {
         try {
@@ -2656,7 +2668,7 @@ function rbScoreboardPal(_inst, _other, uid) {
                 while (!file_text_eof(f)) {
                     var v = gml_Script_s_split_string(_inst, _other, file_text_read_string(f));
                     file_text_readln(f);
-                    if (v.length > 3) rbScoreboardHex[String(v[0])] = String(v[3]).replace(/[^0-9a-fA-F]/g, "");
+                    if (v.length > 3) { rbScoreboardHex[String(v[0])] = String(v[3]).replace(/[^0-9a-fA-F]/g, ""); rbScoreboardTla[String(v[2]).replace(/[^A-Za-z0-9]/g, "").toUpperCase()] = rbScoreboardHex[String(v[0])]; }
                 }
                 file_text_close(f);
             }
@@ -3536,26 +3548,26 @@ colour:4294967295},{x:32,y:16,index:75,id:100185,rotation:0,scaleX:1,scaleY:1,im
 id:100167,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:31,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:0,iinstIDs:[]},{pName:"Instances",id:32,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:30,iinstIDs:[100159,100160,100161,100162,100163,100164,100165,100166,100167,100168,100169,100170,100171,100172,100173,
 100174,100175,100176,100177,100178,100179,100180,100181,100182,100183,100184,100185,100186,100187,109020]},{pName:"Background",id:33,type:1,depth:200,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],bvisible:true,bforeground:false,bindex:-1,bhtiled:false,bvtiled:false,bstretch:false,bblend:-499648,bimage_index:0,bimage_speed:15}]},{pName:"rm_halloffame",width:480,height:270,speed:0,colour:0,LayerCount:3,showColour:false,enableViews:true,viewClearScreen:false,pCode:gml_Room_rm_halloffame_Create,
 backgrounds:[],views:[{visible:true,wview:480,hview:270,wport:480,hport:270},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768}],pInstances:[{x:232,y:8,index:70,id:100188,pPreCreateCode:gml_RoomCC_rm_halloffame_0_PreCreate,rotation:0,scaleX:1,
-scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:232,index:36,id:100189,pPreCreateCode:gml_RoomCC_rm_halloffame_1_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:112,y:40,index:90,id:100190,pPreCreateCode:gml_RoomCC_rm_halloffame_2_PreCreate,rotation:0,scaleX:1.5999999046325684,scaleY:1.149999976158142,imageSpeed:1,imageIndex:0,colour:4294967295},{x:384,y:232,index:34,id:100191,pCode:gml_RoomCC_rm_halloffame_3_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_3_PreCreate,
-rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:192,y:232,index:34,id:100192,pPreCreateCode:gml_RoomCC_rm_halloffame_4_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:512,y:-112,index:94,id:100193,pPreCreateCode:gml_RoomCC_rm_halloffame_5_PreCreate,rotation:0,scaleX:1.2999999523162842,scaleY:0.550000011920929,imageSpeed:1,imageIndex:0,colour:4294967295},{x:512,y:-208,index:93,id:100194,pPreCreateCode:gml_RoomCC_rm_halloffame_6_PreCreate,
-rotation:0,scaleX:1.2999999523162842,scaleY:0.550000011920929,imageSpeed:1,imageIndex:0,colour:4294967295},{x:288,y:232,index:34,id:100195,pPreCreateCode:gml_RoomCC_rm_halloffame_7_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:96,y:232,index:34,id:100196,pCode:gml_RoomCC_rm_halloffame_8_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_8_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:8,index:6,id:100197,rotation:0,
+scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:232,index:36,id:100189,pPreCreateCode:gml_RoomCC_rm_halloffame_1_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:112,y:40,index:90,id:100190,pPreCreateCode:gml_RoomCC_rm_halloffame_2_PreCreate,rotation:0,scaleX:1.5999999046325684,scaleY:1.149999976158142,imageSpeed:1,imageIndex:0,colour:4294967295},{x:408,y:232,index:34,id:100191,pCode:gml_RoomCC_rm_halloffame_3_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_3_PreCreate,
+rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:236,y:232,index:34,id:100192,pPreCreateCode:gml_RoomCC_rm_halloffame_4_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:512,y:-112,index:94,id:100193,pPreCreateCode:gml_RoomCC_rm_halloffame_5_PreCreate,rotation:0,scaleX:1.2999999523162842,scaleY:0.550000011920929,imageSpeed:1,imageIndex:0,colour:4294967295},{x:512,y:-208,index:93,id:100194,pPreCreateCode:gml_RoomCC_rm_halloffame_6_PreCreate,
+rotation:0,scaleX:1.2999999523162842,scaleY:0.550000011920929,imageSpeed:1,imageIndex:0,colour:4294967295},{x:322,y:232,index:34,id:100195,pPreCreateCode:gml_RoomCC_rm_halloffame_7_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:149,y:232,index:34,id:100196,pCode:gml_RoomCC_rm_halloffame_8_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_8_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:8,index:6,id:100197,rotation:0,
 scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:34,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:0,iinstIDs:[]},{pName:"Instances",id:35,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:10,iinstIDs:[100188,100189,100190,100191,100192,100193,100194,100195,100196,100197]},{pName:"Background",id:36,type:1,depth:200,x:0,y:0,hspeed:0,
 vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],bvisible:true,bforeground:false,bindex:-1,bhtiled:false,bvtiled:false,bstretch:false,bblend:-499648,bimage_index:0,bimage_speed:15}]},{pName:"rm_halloffame_retrobowls",width:480,height:270,speed:0,colour:0,LayerCount:3,showColour:false,enableViews:true,viewClearScreen:false,pCode:gml_Room_rm_halloffame_retrobowls_Create,backgrounds:[],views:[{visible:true,wview:480,hview:270,wport:480,hport:270},{wview:1024,hview:768,wport:1024,
 hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768}],pInstances:[{x:232,y:8,index:70,id:100198,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_0_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:232,index:36,id:100199,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_1_PreCreate,
-rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:496,y:-120,index:91,id:100200,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_2_PreCreate,rotation:0,scaleX:1.2999999523162842,scaleY:0.5,imageSpeed:1,imageIndex:0,colour:4294967295},{x:112,y:40,index:92,id:100201,rotation:0,scaleX:1.5999999046325684,scaleY:1.149999976158142,imageSpeed:1,imageIndex:0,colour:4294967295},{x:384,y:232,index:34,id:100202,pCode:gml_RoomCC_rm_halloffame_retrobowls_4_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_4_PreCreate,
-rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:192,y:232,index:34,id:100203,pCode:gml_RoomCC_rm_halloffame_retrobowls_5_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_5_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:288,y:232,index:34,id:100204,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_6_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:96,y:232,index:34,id:100205,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_7_PreCreate,
-rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:37,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:0,iinstIDs:[]},{pName:"Instances",id:38,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:8,iinstIDs:[100198,100199,100200,100201,100202,100203,100204,100205]},{pName:"Background",id:39,type:1,depth:200,x:0,y:0,hspeed:0,
+rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:496,y:-120,index:91,id:100200,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_2_PreCreate,rotation:0,scaleX:1.2999999523162842,scaleY:0.5,imageSpeed:1,imageIndex:0,colour:4294967295},{x:112,y:40,index:92,id:100201,rotation:0,scaleX:1.5999999046325684,scaleY:1.149999976158142,imageSpeed:1,imageIndex:0,colour:4294967295},{x:408,y:232,index:34,id:100202,pCode:gml_RoomCC_rm_halloffame_retrobowls_4_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_4_PreCreate,
+rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:236,y:232,index:34,id:100203,pCode:gml_RoomCC_rm_halloffame_retrobowls_5_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_5_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:322,y:232,index:34,id:100204,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_6_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:149,y:232,index:34,id:100205,pPreCreateCode:gml_RoomCC_rm_halloffame_retrobowls_7_PreCreate,
+rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:37,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:0,iinstIDs:[]},{pName:"Instances",id:38,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:8,iinstIDs:[100198,100199,100200,100201,100202,100203,100204,100205]},{pName:"Background",id:39,type:1,depth:200,x:0,y:0,hspeed:0,
 vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],bvisible:true,bforeground:false,bindex:-1,bhtiled:false,bvtiled:false,bstretch:false,bblend:-499648,bimage_index:0,bimage_speed:15}]},{pName:"rm_halloffame_players",width:480,height:270,speed:0,colour:0,LayerCount:3,showColour:false,enableViews:true,viewClearScreen:false,pCode:gml_Room_rm_halloffame_players_Create,backgrounds:[],views:[{visible:true,wview:480,hview:270,wport:480,hport:270},{wview:1024,hview:768,wport:1024,hport:768}
 ,{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768}],pInstances:[{x:232,y:8,index:70,id:100206,pPreCreateCode:gml_RoomCC_rm_halloffame_players_0_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:240,y:128,index:72,id:100208,pPreCreateCode:gml_RoomCC_rm_halloffame_players_1_PreCreate,
 rotation:0,scaleX:8.666666984558105,scaleY:9,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:112,index:36,id:100209,pPreCreateCode:gml_RoomCC_rm_halloffame_players_2_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:440,y:112,index:36,id:100210,pPreCreateCode:gml_RoomCC_rm_halloffame_players_3_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:236,y:40,index:74,id:100211,pPreCreateCode:gml_RoomCC_rm_halloffame_players_4_PreCreate,
-rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:0,y:0,index:138,id:100207,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:232,index:36,id:100212,pPreCreateCode:gml_RoomCC_rm_halloffame_players_6_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:384,y:232,index:34,id:100213,pCode:gml_RoomCC_rm_halloffame_players_7_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_players_7_PreCreate,rotation:0,scaleX:1,
-scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:192,y:232,index:34,id:100214,pPreCreateCode:gml_RoomCC_rm_halloffame_players_8_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:288,y:232,index:34,id:100215,pPreCreateCode:gml_RoomCC_rm_halloffame_players_9_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:96,y:232,index:34,id:100216,pPreCreateCode:gml_RoomCC_rm_halloffame_players_10_PreCreate,rotation:0,scaleX:1,scaleY:1,
+rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:0,y:0,index:138,id:100207,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:232,index:36,id:100212,pPreCreateCode:gml_RoomCC_rm_halloffame_players_6_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:408,y:232,index:34,id:100213,pCode:gml_RoomCC_rm_halloffame_players_7_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_players_7_PreCreate,rotation:0,scaleX:0.86,
+scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:236,y:232,index:34,id:100214,pPreCreateCode:gml_RoomCC_rm_halloffame_players_8_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:322,y:232,index:34,id:100215,pPreCreateCode:gml_RoomCC_rm_halloffame_players_9_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:149,y:232,index:34,id:100216,pPreCreateCode:gml_RoomCC_rm_halloffame_players_10_PreCreate,rotation:0,scaleX:0.86,scaleY:1,
 imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:40,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:0,iinstIDs:[]},{pName:"Instances",id:41,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:11,iinstIDs:[100206,100207,100208,100209,100210,100211,100212,100213,100214,100215,100216]},{pName:"Background",id:42,type:1,depth:200,x:0,y:0,hspeed:0,vspeed:0,
 visible:1,effectEnabled:1,effectType:"",effectProperties:[],bvisible:true,bforeground:false,bindex:-1,bhtiled:false,bvtiled:false,bstretch:false,bblend:-499648,bimage_index:0,bimage_speed:15}]},{pName:"rm_halloffame_player_records",width:480,height:270,speed:0,colour:0,LayerCount:3,showColour:false,enableViews:true,viewClearScreen:false,pCode:gml_Room_rm_halloffame_player_records_Create,backgrounds:[],views:[{visible:true,wview:480,hview:270,wport:480,hport:270},{wview:1024,hview:768,wport:1024,
 hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768}],pInstances:[{x:232,y:8,index:70,id:100217,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_0_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:232,index:36,id:100218,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_1_PreCreate,
-rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:40,index:95,id:100219,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_2_PreCreate,rotation:0,scaleX:2.9000000953674316,scaleY:1.149999976158142,imageSpeed:1,imageIndex:0,colour:4294967295},{x:384,y:232,index:34,id:100220,pCode:gml_RoomCC_rm_halloffame_player_records_3_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_3_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}
-,{x:192,y:232,index:34,id:100221,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_4_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:288,y:232,index:34,id:100222,pCode:gml_RoomCC_rm_halloffame_player_records_5_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_5_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:96,y:232,index:34,id:100223,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_6_PreCreate,
-rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:416,y:4,index:20,id:100224,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_7_PreCreate,rotation:0,scaleX:1.7272727489471436,scaleY:0.7647058963775635,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:8,index:13,id:100225,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:43,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",
+rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:40,index:95,id:100219,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_2_PreCreate,rotation:0,scaleX:2.9000000953674316,scaleY:1.149999976158142,imageSpeed:1,imageIndex:0,colour:4294967295},{x:408,y:232,index:34,id:100220,pCode:gml_RoomCC_rm_halloffame_player_records_3_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_3_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}
+,{x:236,y:232,index:34,id:100221,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_4_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:322,y:232,index:34,id:100222,pCode:gml_RoomCC_rm_halloffame_player_records_5_Create,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_5_PreCreate,rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:149,y:232,index:34,id:100223,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_6_PreCreate,
+rotation:0,scaleX:0.86,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:416,y:4,index:20,id:100224,pPreCreateCode:gml_RoomCC_rm_halloffame_player_records_7_PreCreate,rotation:0,scaleX:1.7272727489471436,scaleY:0.7647058963775635,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:8,index:13,id:100225,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295}],tiles:[],layers:[{pName:"PopUps",id:43,type:2,depth:0,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",
 effectProperties:[],icount:0,iinstIDs:[]},{pName:"Instances",id:44,type:2,depth:100,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],icount:9,iinstIDs:[100217,100218,100219,100220,100221,100222,100223,100224,100225]},{pName:"Background",id:45,type:1,depth:200,x:0,y:0,hspeed:0,vspeed:0,visible:1,effectEnabled:1,effectType:"",effectProperties:[],bvisible:true,bforeground:false,bindex:-1,bhtiled:false,bvtiled:false,bstretch:false,bblend:-499648,bimage_index:0,bimage_speed:15}
 ]},{pName:"rm_home",width:480,height:270,speed:0,colour:0,LayerCount:5,showColour:false,enableViews:true,pCode:gml_Room_rm_home_Create,backgrounds:[],views:[{visible:true,wview:480,hview:270,wport:480,hport:270},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,hport:768},{wview:1024,hview:768,wport:1024,
 hport:768}],pInstances:[{x:240,y:72,index:84,id:100237,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:384,y:232,index:34,id:100238,pPreCreateCode:gml_RoomCC_rm_home_1_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:24,y:128,index:81,id:100241,pPreCreateCode:gml_RoomCC_rm_home_2_PreCreate,rotation:0,scaleX:1,scaleY:1,imageSpeed:1,imageIndex:0,colour:4294967295},{x:8,y:232,index:36,id:100239,pPreCreateCode:gml_RoomCC_rm_home_3_PreCreate,
@@ -4817,7 +4829,7 @@ var ___swc215___=-1;if(yyCompareVal(___sw214___,0,g_GMLMathEpsilon,false)==0){__
 gml_Script_btn_click_qb_mode_ChooseTeamNew));}function gml_Script_btn_click_ChooseTeamNew(_inst,_other){{gml_Script_slog(_inst,_other,"btn_click_ChooseTeamNew");var gmlchoose_teamuid=_inst.gmluid;{var __yy__v321=GetWithArray(97);for(var __yy__v322 in __yy__v321){if(!__yy__v321.hasOwnProperty(__yy__v322))continue;var __yy__v323=__yy__v321[__yy__v322];{var gmlt=0;for(;yyfless(gmlt,ds_list_size(__yy__v323.gmlteamlist));(g_yyPrePostObject__=gmlt,gmlt=(g_yyPrePostObject__ instanceof Long?gmlt.add(1):++gmlt),g_yyPrePostObject__)){
 {var gmlteam=ds_list_find_value(__yy__v323.gmlteamlist,gmlt);if(yyfequal(ds_map_find_value(gmlteam,"uid"),gmlchoose_teamuid)){{__yy__v323.gmlnewteam=gmlteam;var gmlmsg=gml_Script_s_str(__yy__v323,_inst,"msg_ChooseNewTeam");gmlmsg=string_replace(gmlmsg,"$teamname",ds_map_find_value(gmlteam,"name"));gml_Script_s_create_message(__yy__v323,_inst,"",gmlmsg,gml_Script_s_str(__yy__v323,_inst,"ui_Cancel"),gml_Script_s_str(__yy__v323,_inst,"ui_Confirm"),kgml_Script_s_msg_clear,kgml_Script_btn_response_confirm_new_team,
 global.gmlc_background,1);};};}};}}};}}function gml_Script_btn_click_qb_mode_ChooseTeamNew(_inst,_other){{gml_Script_slog(_inst,_other,"btn_click_qb_mode_ChooseTeamNew");var gmlchoose_teamuid=_inst.gmluid;{var __yy__v324=GetWithArray(97);for(var __yy__v325 in __yy__v324){if(!__yy__v324.hasOwnProperty(__yy__v325))continue;var __yy__v326=__yy__v324[__yy__v325];{var gmlt=0;for(;yyfless(gmlt,ds_list_size(__yy__v326.gmlteamlist));(g_yyPrePostObject__=gmlt,gmlt=(g_yyPrePostObject__ instanceof Long?gmlt.add(1):++gmlt),
-g_yyPrePostObject__)){{var gmlteam=ds_list_find_value(__yy__v326.gmlteamlist,gmlt);if(yyfequal(ds_map_find_value(gmlteam,"uid"),gmlchoose_teamuid)){{__yy__v326.gmlnewteam=gmlteam;room_goto(42);};};}};}}};}}function gml_GlobalScript_btn_click_ChooseReject(_inst,_other){(_inst.gmlbtn_click_ChooseReject=__yy_method(_inst,gml_Script_btn_click_ChooseReject));}function gml_Script_btn_click_ChooseReject(_inst,_other){{gml_Script_s_start_new_season(_inst,_other,false);}}function gml_GlobalScript_btn_click_Continue(_inst,
+g_yyPrePostObject__)){{var gmlteam=ds_list_find_value(__yy__v326.gmlteamlist,gmlt);if(yyfequal(ds_map_find_value(gmlteam,"uid"),gmlchoose_teamuid)){{__yy__v326.gmlnewteam=gmlteam;room_goto(42);};};}};}}};}}function gml_GlobalScript_btn_click_ChooseReject(_inst,_other){(_inst.gmlbtn_click_ChooseReject=__yy_method(_inst,gml_Script_btn_click_ChooseReject));}function gml_Script_btn_click_ChooseReject(_inst,_other){{rbSeasonLoad(_inst,_other,false);}}function gml_GlobalScript_btn_click_Continue(_inst,
 _other){(_inst.gmlbtn_click_Continue=__yy_method(_inst,gml_Script_btn_click_Continue));(_inst.gmlbtn_click_SimGame=__yy_method(_inst,gml_Script_btn_click_SimGame));}function gml_Script_btn_click_Continue(_inst,_other){{gml_Script_s_play(_inst,_other,1);}}function gml_Script_btn_click_SimGame(_inst,_other){{if(_inst&&_inst.gmlrb_simseason){rbSimRegSeason(_inst,_other);return;};yyInst(_inst,_other,97).gmlsim_action=true;gml_Script_s_play(_inst,_other,1);}}function gml_GlobalScript_btn_click_Details_Continue(_inst,_other){(_inst.gmlbtn_click_Details_Continue=__yy_method(_inst,
 gml_Script_btn_click_Details_Continue));}function gml_Script_btn_click_Details_Continue(_inst,_other){{gml_Script_slog(_inst,_other,"btn_click_Details_Continue");{var __yy__v327=GetWithArray(97);for(var __yy__v328 in __yy__v327){if(!__yy__v327.hasOwnProperty(__yy__v328))continue;var __yy__v329=__yy__v327[__yy__v328];{__yy__v329.gmlfname=yyInst(_inst,_other,100025).gmltext;__yy__v329.gmllname=yyInst(_inst,_other,100026).gmltext;if(yyfequal(__yy__v329.gmlfname,"")){__yy__v329.gmlfname=gml_Script_s_get_random_first_name(__yy__v329,
 _inst,true);};if(yyfequal(__yy__v329.gmllname,"")){__yy__v329.gmllname=gml_Script_s_get_random_last_name(__yy__v329,_inst);};__yy__v329.gmlfname_coach=gml_Script_s_get_random_first_name(__yy__v329,_inst,true);__yy__v329.gmllname_coach=gml_Script_s_get_random_last_name(__yy__v329,_inst);__yy__v329.gmlfavourite_team_id=real(ds_map_find_value(__yy__v329.gmlmyteam,"uid"));if(yyfequal(yyInst(_inst,_other,100037).gmlstate,true)){{gml_Script_slog(__yy__v329,_inst,"Choosing fave team!");__yy__v329.gmlmyteam_id=real(ds_map_find_value(__yy__v329.gmlmyteam,
@@ -4892,7 +4904,7 @@ room_goto(29);};}else {{gml_Script_s_create_message(_inst,_other,"",gml_Script_s
 }function gml_Script_btn_click_OptionsSalaryCap(_inst,_other){{if(yyfequal(ds_map_find_value(yyInst(_inst,_other,97).gmlmap_options,"fullversion"),1)){{if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gml_Script_recruitment_credits_toggle_roster_size(_inst,_other);};}else {{gml_Script_salary_cap_toggle_roster_size(_inst,_other);};};gml_Script_s_update_options(_inst,_other);};}else {{gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,"msg_NeedUnlimited"),gml_Script_s_str(_inst,
 _other,"ui_No"),gml_Script_s_str(_inst,_other,"ui_Yes"),kgml_Script_s_msg_clear,kgml_Script_s_open_store,global.gmlc_background,1);};};}}function gml_Script_salary_cap_toggle_roster_size(_inst,_other){{var gmlcap=yyInst(_inst,_other,97).gmlsalary_cap;if(yyfless(gmlcap,200)){yyInst(_inst,_other,97).gmlsalary_cap=200;}else if(yyfless(gmlcap,275)){yyInst(_inst,_other,97).gmlsalary_cap=275;}else if(yyfless(gmlcap,350)){yyInst(_inst,_other,97).gmlsalary_cap=350;}else if(yyfless(gmlcap,450)){yyInst(_inst,_other,97).gmlsalary_cap=450;}else {if(yyfgreater(ds_list_size(yyInst(_inst,_other,97).gmlroster),10)){gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,"msg_SalaryCheckRoster"),gml_Script_s_str(_inst,_other,"ui_Continue"),"",kgml_Script_s_msg_clear,"",global.gmlc_background,1);}else {yyInst(_inst,_other,97).gmlsalary_cap=150;};};}}function gml_GlobalScript_chk_click_gamepad(_inst,_other){(_inst.gmlchk_click_gamepad=__yy_method(_inst,gml_Script_chk_click_gamepad));}function gml_Script_chk_click_gamepad(_inst,
 _other){{gml_Script_slog(_inst,_other,"chk_click_gamepad");return;}}function gml_GlobalScript_s_apple_arcade_helpers(_inst,_other){(_inst.gmls_aa_debug_give_cc=__yy_method(_inst,gml_Script_s_aa_debug_give_cc));}function gml_Script_s_aa_debug_give_cc(_inst,_other){{yyInst(_inst,_other,97).gmlcoach_credit=yyfplus(yyInst(_inst,_other,97).gmlcoach_credit,10);}}function gml_GlobalScript_btn_click_PlayerProfile(_inst,_other){(_inst.gmlbtn_click_PlayerProfile=__yy_method(_inst,gml_Script_btn_click_PlayerProfile));
-}function gml_Script_btn_click_PlayerProfile(_inst,_other){{gml_Script_slog(_inst,_other,"btn_click_PlayerProfile");if(global.gmldc_view===true&&yyfequal(g_pBuiltIn.get_current_room(),25)){if(global.gmlsub_view===true){var gmlsubT=global.gmlsub_pmap;var gmlsubC=_inst.gmlpmap;if(gmlsubT!==undefined&&gmlsubC!==undefined&&Number(gmlsubT)>=0&&Number(gmlsubC)>=0&&Number(gmlsubT)!==Number(gmlsubC)){if(!ds_map_find_value(gmlsubC,"backup")&&!ds_map_find_value(gmlsubT,"backup")){var gmlSL=ds_list_create();var gmlSR=yyInst(_inst,_other,97).gmlroster;for(var gmlSi=0;gmlSi<ds_list_size(gmlSR);gmlSi++){var gmlSm=ds_list_find_value(gmlSR,gmlSi);if(Number(ds_map_find_value(gmlSm,"position"))===Number(ds_map_find_value(gmlsubT,"position"))){ds_list_add(gmlSL,gmlSm);}}var gmlSS=gml_Script_s_sort_players(_inst,_other,gmlSL,3);for(var gmlSi=0;gmlSi<ds_list_size(gmlSS);gmlSi++){ds_map_set(ds_list_find_value(gmlSS,gmlSi),"sv",1000-gmlSi);}var gmlSa=ds_map_find_value(gmlsubT,"sv");ds_map_set(gmlsubT,"sv",ds_map_find_value(gmlsubC,"sv"));ds_map_set(gmlsubC,"sv",gmlSa);if(ds_map_exists(gmlsubT,"slot")||ds_map_exists(gmlsubC,"slot")){var gmlSb=ds_map_exists(gmlsubT,"slot")?ds_map_find_value(gmlsubT,"slot"):0;var gmlSc=ds_map_exists(gmlsubC,"slot")?ds_map_find_value(gmlsubC,"slot"):0;ds_map_set(gmlsubT,"slot",gmlSc);ds_map_set(gmlsubC,"slot",gmlSb);}global.gmlsub_view=false;global.gmlsub_pmap=(-4);room_goto(25);return;}ds_map_set(gmlsubC,"backup",false);ds_map_set(gmlsubT,"backup",true);var gmlDL=yyInst(_inst,_other,97).gmlroster;var gmlDP=Number(ds_map_find_value(gmlsubT,"position"));var gmlDK=0;for(var gmlDZ=0;gmlDZ<ds_list_size(gmlDL);gmlDZ++){var gmlDM=ds_list_find_value(gmlDL,gmlDZ);if(Number(ds_map_find_value(gmlDM,"position"))!==gmlDP){continue;}var gmlDT=(Number(gmlDM)===Number(gmlsubT))?gmlsubC:((Number(gmlDM)===Number(gmlsubC))?gmlsubT:gmlDM);ds_map_set(gmlDT,"sv",1000-gmlDK);gmlDK++;}if(ds_map_exists(gmlsubT,"slot")&&ds_map_find_value(gmlsubT,"slot")){ds_map_set(gmlsubT,"slot",0);ds_map_set(gmlsubC,"slot",true);};};global.gmlsub_view=false;global.gmlsub_pmap=(-4);room_goto(25);return;}else{global.gmlsub_pmap=_inst.gmlpmap;global.gmlsub_view=true;room_goto(25);return;};};if(yyfequal(yyInst(_inst,_other,97).gmlprofile_back_to,(-1))){{if(yyfequal(g_pBuiltIn.get_current_room(),22)){return;};};};yyInst(_inst,_other,97).gmlplayer_profile=_inst.gmlpmap;if(yyfequal(g_pBuiltIn.get_current_room(),12)){gml_Script_btn_click_Profile_Stats(_inst,_other);}else {room_goto(22);};}}function gml_GlobalScript_btn_click_PlayerProfile_Back(_inst,_other){(_inst.gmlbtn_click_PlayerProfile_Back=__yy_method(_inst,
+}function gml_Script_btn_click_PlayerProfile(_inst,_other){{gml_Script_slog(_inst,_other,"btn_click_PlayerProfile");if(global.gmldc_view===true&&yyfequal(g_pBuiltIn.get_current_room(),25)){if(global.gmlsub_view===true){var gmlsubT=global.gmlsub_pmap;var gmlsubC=_inst.gmlpmap;if(gmlsubT!==undefined&&gmlsubC!==undefined&&Number(gmlsubT)>=0&&Number(gmlsubC)>=0&&Number(gmlsubT)!==Number(gmlsubC)){if(Number(ds_map_find_value(gmlsubC,"position"))!==Number(ds_map_find_value(gmlsubT,"position"))&&ds_map_exists(gmlsubT,"slot")&&ds_map_find_value(gmlsubT,"slot")){var gmlXR=yyInst(_inst,_other,97).gmlroster;for(var gmlXi=0;gmlXi<ds_list_size(gmlXR);gmlXi++){ds_map_set(ds_list_find_value(gmlXR,gmlXi),"slot",0);}ds_map_set(gmlsubC,"slot",true);if(ds_map_find_value(gmlsubC,"backup")){ds_map_set(gmlsubC,"backup",false);}global.gmlsub_view=false;global.gmlsub_pmap=(-4);room_goto(25);return;}if(!ds_map_find_value(gmlsubC,"backup")&&!ds_map_find_value(gmlsubT,"backup")){var gmlSL=ds_list_create();var gmlSR=yyInst(_inst,_other,97).gmlroster;for(var gmlSi=0;gmlSi<ds_list_size(gmlSR);gmlSi++){var gmlSm=ds_list_find_value(gmlSR,gmlSi);if(Number(ds_map_find_value(gmlSm,"position"))===Number(ds_map_find_value(gmlsubT,"position"))){ds_list_add(gmlSL,gmlSm);}}var gmlSS=gml_Script_s_sort_players(_inst,_other,gmlSL,3);for(var gmlSi=0;gmlSi<ds_list_size(gmlSS);gmlSi++){ds_map_set(ds_list_find_value(gmlSS,gmlSi),"sv",1000-gmlSi);}var gmlSa=ds_map_find_value(gmlsubT,"sv");ds_map_set(gmlsubT,"sv",ds_map_find_value(gmlsubC,"sv"));ds_map_set(gmlsubC,"sv",gmlSa);if(ds_map_exists(gmlsubT,"slot")||ds_map_exists(gmlsubC,"slot")){var gmlSb=ds_map_exists(gmlsubT,"slot")?ds_map_find_value(gmlsubT,"slot"):0;var gmlSc=ds_map_exists(gmlsubC,"slot")?ds_map_find_value(gmlsubC,"slot"):0;ds_map_set(gmlsubT,"slot",gmlSc);ds_map_set(gmlsubC,"slot",gmlSb);}global.gmlsub_view=false;global.gmlsub_pmap=(-4);room_goto(25);return;}ds_map_set(gmlsubC,"backup",false);ds_map_set(gmlsubT,"backup",true);var gmlDL=yyInst(_inst,_other,97).gmlroster;var gmlDP=Number(ds_map_find_value(gmlsubT,"position"));var gmlDK=0;for(var gmlDZ=0;gmlDZ<ds_list_size(gmlDL);gmlDZ++){var gmlDM=ds_list_find_value(gmlDL,gmlDZ);if(Number(ds_map_find_value(gmlDM,"position"))!==gmlDP){continue;}var gmlDT=(Number(gmlDM)===Number(gmlsubT))?gmlsubC:((Number(gmlDM)===Number(gmlsubC))?gmlsubT:gmlDM);ds_map_set(gmlDT,"sv",1000-gmlDK);gmlDK++;}if(ds_map_exists(gmlsubT,"slot")&&ds_map_find_value(gmlsubT,"slot")){ds_map_set(gmlsubT,"slot",0);ds_map_set(gmlsubC,"slot",true);};};global.gmlsub_view=false;global.gmlsub_pmap=(-4);room_goto(25);return;}else{global.gmlsub_pmap=_inst.gmlpmap;global.gmlsub_view=true;room_goto(25);return;};};if(yyfequal(yyInst(_inst,_other,97).gmlprofile_back_to,(-1))){{if(yyfequal(g_pBuiltIn.get_current_room(),22)){return;};};};yyInst(_inst,_other,97).gmlplayer_profile=_inst.gmlpmap;if(yyfequal(g_pBuiltIn.get_current_room(),12)){gml_Script_btn_click_Profile_Stats(_inst,_other);}else {room_goto(22);};}}function gml_GlobalScript_btn_click_PlayerProfile_Back(_inst,_other){(_inst.gmlbtn_click_PlayerProfile_Back=__yy_method(_inst,
 gml_Script_btn_click_PlayerProfile_Back));}function gml_Script_btn_click_PlayerProfile_Back(_inst,_other){{if(yyGetBool(yyInst(_inst,_other,97).gmlviewing_hof_players)){room_goto(12);}else {room_goto(22);};}}function gml_GlobalScript_btn_click_ProfilePrev(_inst,_other){(_inst.gmlbtn_click_ProfilePrev=__yy_method(_inst,gml_Script_btn_click_ProfilePrev));}function gml_Script_btn_click_ProfilePrev(_inst,_other){{{var __yy__v408=GetWithArray(97);for(var __yy__v409 in __yy__v408){if(!__yy__v408.hasOwnProperty(__yy__v409))continue;
 var __yy__v410=__yy__v408[__yy__v409];{var gmllist=(-4);var gmlpos=ds_list_find_index(__yy__v410.gmlroster,__yy__v410.gmlplayer_profile);if(yyfgreaterequal(gmlpos,0)){{gmllist=__yy__v410.gmlroster;};}else {{gmlpos=ds_list_find_index(__yy__v410.gmldraftlist,__yy__v410.gmlplayer_profile);if(yyfgreaterequal(gmlpos,0)){{gmllist=__yy__v410.gmldraftlist;};}else {{gmlpos=ds_list_find_index(__yy__v410.gmlfreeagentlist,__yy__v410.gmlplayer_profile);if(yyfgreaterequal(gmlpos,0)){{gmllist=__yy__v410.gmlfreeagentlist;
 };}else {{gmlpos=ds_list_find_index(__yy__v410.gmltradelist,__yy__v410.gmlplayer_profile);if(yyfgreaterequal(gmlpos,0)){{gmllist=__yy__v410.gmltradelist;};}else {{gmlpos=ds_list_find_index(__yy__v410.gmlstorelist,__yy__v410.gmlplayer_profile);if(yyfgreaterequal(gmlpos,0)){{gmllist=__yy__v410.gmlstorelist;};};};};};};};};};};if(yyGetBool(gmllist)){{(g_yyPrePostObject__=gmlpos,gmlpos=(g_yyPrePostObject__ instanceof Long?gmlpos.subtract(1):--gmlpos),g_yyPrePostObject__);if(yyfless(gmlpos,0)){gmlpos=yyfminus(__yy_gml_errCheck(ds_list_size(gmllist)),
@@ -6217,8 +6229,8 @@ _other,97).gmldone_season_review)))&&(yyGetBool(yyfgreater(yyInst(_inst,_other,9
 _other,gmlweek);if((yyGetBool(gmlfix))&&(yyGetBool(yyfnotequal(ds_map_find_value(gmlfix,"human_win"),"unplayed")))){{(g_yyPrePostObject__=yyInst(_inst,_other,97).gmlweek,yyInst(_inst,_other,97).gmlweek=(g_yyPrePostObject__ instanceof Long?yyInst(_inst,_other,97).gmlweek.add(1):++yyInst(_inst,_other,97).gmlweek),g_yyPrePostObject__);yyInst(_inst,_other,97).gmlstage=2;return;};};if(yyGetBool(gmlfix)){{gml_Script_slogf(_inst,_other,"*** Enter: Next human match (season or post season)");room_goto(21);
 };}else {if(yyfless(gmlweek,yyInst(_inst,_other,97).gmlfirst_week_postseason)){{gml_Script_slogf(_inst,_other,"*** Enter: Bye week");gml_Script_s_do_bye_week(_inst,_other);};}else {if((yyGetBool(yyfgreaterequal(gmlweek,yyInst(_inst,_other,97).gmlfirst_week_postseason)))&&(yyGetBool(yyflessequal(gmlweek,gml_Script_s_get_last_schedule_week(_inst,_other))))){{gml_Script_slogf(_inst,_other,"*** Enter: Postseason (non player)");room_goto(54);};}else {if((yyGetBool(!yyGetBool(yyInst(_inst,_other,97).gmldone_season_review)))&&(yyGetBool(yyfgreater(yyInst(_inst,
 _other,97).gmlyear,1)))){{gml_Script_slogf(_inst,_other,"*** Enter: Season review");yyInst(_inst,_other,97).gmlstage=1;yyInst(_inst,_other,97).gmldone_season_review=true;room_goto(38);};}else {if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{gml_Script_slogf(_inst,_other,"*** Enter: Pro draft");yyInst(_inst,_other,97).gmlstage=(-11);gml_Script_s_create_message(_inst,_other,"",gml_Script_s_str(_inst,_other,"msg_TimeForProDraft"),"",gml_Script_s_str(_inst,_other,"ui_Continue"),"",kgml_Script_s_continue_time_for_draft_msg,
-global.gmlc_background,1);};}else {if(yyfgreater(gml_Script_s_count_joboffers(_inst,_other),0)){{gml_Script_slogf(_inst,_other,"*** Enter: Job offers");room_goto(3);};}else {{gml_Script_slogf(_inst,_other,"*** Enter: New season");gml_Script_s_start_new_season(_inst,_other,false);};};};};};};};}}function gml_GlobalScript_s_player_profile_qb_mode(_inst,_other){(_inst.gmls_player_profile_qb_mode=__yy_method(_inst,gml_Script_s_player_profile_qb_mode));}function gml_Script_s_player_profile_qb_mode(_inst,
-_other){{yyInst(_inst,_other,100418).gmltext=string(yyInst(_inst,_other,97).gmlqb_nrg);if(yyfgreater(gml_Script_s_get_qb_energy(_inst,_other),99)){yyInst(_inst,_other,100421).gmlactive=false;};}}function gml_GlobalScript_s_do_next_week(_inst,_other){(_inst.gmls_do_next_week=__yy_method(_inst,gml_Script_s_do_next_week));}function gml_Script_s_do_next_week(_inst,_other){{gml_Script_slog(_inst,_other,"s_do_next_week");try{rbCpuMoraleFlush(_inst,_other);}catch(_e){}try{rbCpuInjuryWeek(_inst,_other);}catch(_e){}try{rbCpuTradesWeek(_inst,_other);}catch(_e){}try{rbCpuSignWeek(_inst,_other);}catch(_e){}try{rbFaDedupe(_inst,_other);}catch(_e){}var gmlfacilities_week=9;var gmlcontracts_week=16;if(yyGetBool(gml_Script_s_is_co_mode(_inst,
+global.gmlc_background,1);};}else {if(yyfgreater(gml_Script_s_count_joboffers(_inst,_other),0)){{gml_Script_slogf(_inst,_other,"*** Enter: Job offers");room_goto(3);};}else {{gml_Script_slogf(_inst,_other,"*** Enter: New season");rbSeasonLoad(_inst,_other,false);};};};};};};};}}function gml_GlobalScript_s_player_profile_qb_mode(_inst,_other){(_inst.gmls_player_profile_qb_mode=__yy_method(_inst,gml_Script_s_player_profile_qb_mode));}function gml_Script_s_player_profile_qb_mode(_inst,
+_other){{yyInst(_inst,_other,100418).gmltext=string(yyInst(_inst,_other,97).gmlqb_nrg);if(yyfgreater(gml_Script_s_get_qb_energy(_inst,_other),99)){yyInst(_inst,_other,100421).gmlactive=false;};}}function gml_GlobalScript_s_do_next_week(_inst,_other){(_inst.gmls_do_next_week=__yy_method(_inst,gml_Script_s_do_next_week));}function gml_Script_s_do_next_week(_inst,_other){{gml_Script_slog(_inst,_other,"s_do_next_week");try{rbCpuMoraleFlush(_inst,_other);}catch(_e){}try{rbCpuInjuryWeek(_inst,_other);}catch(_e){}try{rbCpuTradesWeek(_inst,_other);}catch(_e){}try{rbCpuStatsWeek(_inst,_other);}catch(_e){}try{rbCpuSignWeek(_inst,_other);}catch(_e){}try{rbFaDedupe(_inst,_other);}catch(_e){}var gmlfacilities_week=9;var gmlcontracts_week=16;if(yyGetBool(gml_Script_s_is_co_mode(_inst,
 _other))){{};};{var __yy__v907=GetWithArray(97);for(var __yy__v908 in __yy__v907){if(!__yy__v907.hasOwnProperty(__yy__v908))continue;var __yy__v909=__yy__v907[__yy__v908];{(g_yyPrePostObject__=__yy__v909.gmlweek,__yy__v909.gmlweek=(g_yyPrePostObject__ instanceof Long?__yy__v909.gmlweek.add(1):++__yy__v909.gmlweek),g_yyPrePostObject__);__yy__v909.gmloffers_done=false;__yy__v909.gmlfans_done_update=false;__yy__v909.gmlprematch_dilemma_done=false;__yy__v909.gmlprematch_dilemma_shown_count=0;ds_list_clear(__yy__v909.gmlprematch_dilemma_chosen_players);
 __yy__v909.gmlboost_morale_done=false;__yy__v909.gmlboost_condition_done=false;__yy__v909.gmlboost_gpa_done=false;if(yyGetBool(__yy__v909.gmlqb_mode)){{gml_Script_s_degrade_shop_items(__yy__v909,_inst);gml_Script_s_qb_mode_update_resting(__yy__v909,_inst);};};gml_Script_s_clear_trade_offers(__yy__v909,_inst);gml_Script_s_reset_player_meetings(__yy__v909,_inst);gml_Script_s_do_result_news(__yy__v909,_inst);gml_Script_s_post_match_gpa_refresh(__yy__v909,_inst);if(yyfequal(__yy__v909.gmlweek,gmlfacilities_week)){
 gml_Script_s_decline_facilities(__yy__v909,_inst);};if((yyGetBool(yyfequal(__yy__v909.gmlweek,yyInst(_inst,_other,97).gmlfirst_week_playoffs)))&&(yyGetBool(!yyGetBool(gml_Script_s_is_co_real(__yy__v909,_inst))))){gml_Script_s_create_playoffs2(__yy__v909,_inst);};if(yyGetBool(gml_Script_s_is_co_real(__yy__v909,_inst))){gml_Script_s_schedule_updates(__yy__v909,_inst);};gml_Script_s_create_hirelist(__yy__v909,_inst,true,false);gml_Script_s_create_storelist(__yy__v909,_inst,yyfplus(1,__yy_gml_errCheck(irandom(2))));
@@ -6427,7 +6439,7 @@ var ___sw788___=yyInst(_inst,_other,_inst.gmlholder).image_index;var ___swc789__
 break;}};break;}case 7:{gmloffsetx=1;gmloffsety=2;_inst.gmlheight=yyftime(10,__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlholder).image_yscale));break;}case 8:{gmloffsetx=1;gmloffsety=0;var ___sw790___=yyInst(_inst,_other,_inst.gmlholder).image_index;var ___swc791___=-1;if(yyCompareVal(___sw790___,0,g_GMLMathEpsilon,false)==0){___swc791___=0;}else if(yyCompareVal(___sw790___,1,g_GMLMathEpsilon,false)==0){___swc791___=1;}else if(yyCompareVal(___sw790___,2,g_GMLMathEpsilon,false)==0){___swc791___=2;}else if(yyCompareVal(___sw790___,
 4,g_GMLMathEpsilon,false)==0){___swc791___=3;}else if(yyCompareVal(___sw790___,5,g_GMLMathEpsilon,false)==0){___swc791___=4;}switch(___swc791___){case 0:{_inst.gmlheight=36;break;}case 1:{_inst.gmlheight=38;break;}case 2:{_inst.gmlheight=40;break;}case 3:{_inst.gmlheight=38;break;}case 4:{_inst.gmlheight=36;break;}};break;}case 9:{gmloffsetx=9;gmloffsety=(-2);_inst.gmlheight=0;break;}case 10:{gmloffsetx=1;gmloffsety=2;_inst.gmlheight=0;break;}};};};gmloffsetx=yyftime(gmloffsetx,yyInst(_inst,_other,_inst.gmlholder).image_xscale);
 gmloffsety=yyftime(gmloffsety,yyInst(_inst,_other,_inst.gmlholder).image_yscale);var gmldist=distance_to_point(_inst,yyInst(_inst,_other,_inst.gmlholder).x,yyInst(_inst,_other,_inst.gmlholder).y);if((yyGetBool(yyfless(gmldist,3)))&&(yyGetBool(gml_Script_s_sprite_holding_ball(_inst,_other,yyInst(_inst,_other,_inst.gmlholder).sprite_index)))){{_inst.x=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlholder).x),__yy_gml_errCheck(gmloffsetx));_inst.y=yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,
-_inst.gmlholder).y),__yy_gml_errCheck(gmloffsety));};}else {{_inst.x=lerp(_inst.x,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlholder).x),__yy_gml_errCheck(gmloffsetx)),0.2);_inst.y=lerp(_inst.y,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlholder).y),__yy_gml_errCheck(gmloffsety)),0.2);};};}}function gml_GlobalScript_s_is_ball_dead(_inst,_other){(_inst.gmls_is_ball_dead=__yy_method(_inst,gml_Script_s_is_ball_dead));}function gml_Script_s_is_ball_dead(_inst,_other){{{var __yy__v1012=GetWithArray(global.gmlmaster_ball);
+_inst.gmlholder).y),__yy_gml_errCheck(gmloffsety));};}else {{_inst.x=lerp(_inst.x,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlholder).x),__yy_gml_errCheck(gmloffsetx)),rbSgBallLerp(_inst));_inst.y=lerp(_inst.y,yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlholder).y),__yy_gml_errCheck(gmloffsety)),rbSgBallLerp(_inst));};};}}function gml_GlobalScript_s_is_ball_dead(_inst,_other){(_inst.gmls_is_ball_dead=__yy_method(_inst,gml_Script_s_is_ball_dead));}function gml_Script_s_is_ball_dead(_inst,_other){{{var __yy__v1012=GetWithArray(global.gmlmaster_ball);
 for(var __yy__v1013 in __yy__v1012){if(!__yy__v1012.hasOwnProperty(__yy__v1013))continue;var __yy__v1014=__yy__v1012[__yy__v1013];{__yy__v1014.gmlis_dead=false;var ___sw796___=__yy__v1014.gmlstate;var ___swc797___=-1;if(yyCompareVal(___sw796___,9,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,10,g_GMLMathEpsilon,false)==0){___swc797___=0;}else if(yyCompareVal(___sw796___,18,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,19,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,0,g_GMLMathEpsilon,
 false)==0||yyCompareVal(___sw796___,2,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,3,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,5,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,13,g_GMLMathEpsilon,false)==0){___swc797___=1;}else if(yyCompareVal(___sw796___,4,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,6,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,7,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,8,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,
 11,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,12,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,14,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,15,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,16,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,17,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,20,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw796___,21,g_GMLMathEpsilon,false)==0){___swc797___=2;}switch(___swc797___){case 0:{if(yyGetBool(__yy__v1014.gmlholder)){
@@ -6658,7 +6670,7 @@ false)==0){___swc895___=5;}else if(yyCompareVal(___sw894___,"route_out3",g_GMLMa
 break;}case 1:{_inst.gmlmy_route=path_duplicate(1);break;}case 2:{_inst.gmlmy_route=path_duplicate(_inst.gmlroute_slant_fake);break;}case 3:{_inst.gmlmy_route=path_duplicate(2);break;}case 4:{_inst.gmlmy_route=path_duplicate(5);break;}case 5:{_inst.gmlmy_route=path_duplicate(6);break;}case 6:{_inst.gmlmy_route=path_duplicate(7);break;}case 7:{_inst.gmlmy_route=path_duplicate(3);break;}case 8:{_inst.gmlmy_route=path_duplicate(4);break;}case 9:{_inst.gmlmy_route=path_duplicate(8);break;}case 10:{_inst.gmlmy_route=path_duplicate(9);
 break;}case 11:{_inst.gmlmy_route=path_duplicate(10);break;}case 12:{_inst.gmlmy_route=path_duplicate(11);break;}case 13:{_inst.gmlmy_route=path_duplicate(12);break;}case 14:{_inst.gmlmy_route=path_duplicate(13);break;}case 15:{_inst.gmlmy_route=path_duplicate(14);break;}case 16:{_inst.gmlmy_route=path_duplicate(15);break;}case 17:{_inst.gmlmy_route=path_duplicate(16);break;}case 18:{_inst.gmlmy_route=path_duplicate(17);break;}case 19:{_inst.gmlmy_route=path_duplicate(19);break;}case 20:{_inst.gmlmy_route=path_duplicate(20);
 break;}case 21:{_inst.gmlmy_route=path_duplicate(23);break;}default :{break;}};if(yyfequal(_inst.gmlfacing,(-1))){{path_mirror(_inst.gmlmy_route);path_shift(_inst.gmlmy_route,__yy_gml_errCheck(-__yy_gml_errCheck(path_get_x(_inst.gmlmy_route,0))),0);};};_inst.gmlmy_route_startx=_inst.x;_inst.gmlmy_route_starty=_inst.y;}}function gml_GlobalScript_s_create_news_message(_inst,_other){(_inst.gmls_create_news_dyn_message=__yy_method(_inst,gml_Script_s_create_news_dyn_message));}function gml_Script_s_create_news_dyn_message(_inst,
-_other,argument0){{var gmlbx=yyfminus(__yy_gml_errCheck(display_get_gui_width()),157);var gmlond=instance_create_layer(0,0,"PopUps",8);var gmlbtn_1=instance_create_layer(gmlbx,215,"PopUps",34);yyInst(_inst,_other,gmlond).gmlmsg_type=ds_map_find_value(argument0,"typ");yyInst(_inst,_other,gmlond).gmltext=string_hash_to_newline(ds_map_find_value(argument0,"txt"));var gml_pmap=ds_map_create();ds_map_set(gml_pmap,"teamid",real(ds_map_find_value(argument0,"pmap_teamid")));ds_map_set(gml_pmap,"position",real(ds_map_find_value(argument0,
+_other,argument0){{if(rbSimQuiet()){return;}var gmlbx=yyfminus(__yy_gml_errCheck(display_get_gui_width()),157);var gmlond=instance_create_layer(0,0,"PopUps",8);var gmlbtn_1=instance_create_layer(gmlbx,215,"PopUps",34);yyInst(_inst,_other,gmlond).gmlmsg_type=ds_map_find_value(argument0,"typ");yyInst(_inst,_other,gmlond).gmltext=string_hash_to_newline(ds_map_find_value(argument0,"txt"));var gml_pmap=ds_map_create();ds_map_set(gml_pmap,"teamid",real(ds_map_find_value(argument0,"pmap_teamid")));ds_map_set(gml_pmap,"position",real(ds_map_find_value(argument0,
 "pmap_position")));ds_map_set(gml_pmap,"skin",real(ds_map_find_value(argument0,"pmap_skin")));ds_map_set(gml_pmap,"face_x",real(ds_map_find_value(argument0,"pmap_face_x")));ds_map_set(gml_pmap,"face_y",real(ds_map_find_value(argument0,"pmap_face_y")));yyInst(_inst,_other,gmlond).gmlpmap=gml_pmap;yyInst(_inst,_other,gmlbtn_1).gmltext=gml_Script_s_str(_inst,_other,"ui_Continue");yyInst(_inst,_other,gmlbtn_1).gmlonClickAction=kgml_Script_s_news_clear;yyInst(_inst,_other,gmlbtn_1).depth=yyfminus(__yy_gml_errCheck(yyInst(_inst,
 _other,gmlond).depth),1);}}function gml_GlobalScript_s_set_position_defense(_inst,_other){(_inst.gmls_set_position_defense=__yy_method(_inst,gml_Script_s_set_position_defense));}function gml_Script_s_set_position_defense(_inst,_other){{if(yyfequal(_inst.gmlinum,12)){var rbSy=yyfplus(yyInst(_inst,_other,104).gmly_scrim,84);var rbA=GetWithArray(107);for(var rbK in rbA){if(!rbA.hasOwnProperty(rbK))continue;if(yyfequal(rbA[rbK].gmlinum,12)){rbSy=rbA[rbK].y;}}_inst.gmlposition=8;_inst.gmlrandyards=1;_inst.x=yyfminus(yyInst(_inst,_other,104).gmlx_scrim,yyftime(40,_inst.gmlfacing));_inst.y=rbSy;return;}_inst.x=yyfminus(__yy_gml_errCheck(yyInst(_inst,_other,104).gmlx_scrim),__yy_gml_errCheck(yyftime(20,__yy_gml_errCheck(_inst.gmlfacing))));var ___sw898___=_inst.gmlinum;var ___swc899___=-1;if(yyCompareVal(___sw898___,1,g_GMLMathEpsilon,false)==0){___swc899___=0;}else if(yyCompareVal(___sw898___,
 2,g_GMLMathEpsilon,false)==0){___swc899___=1;}else if(yyCompareVal(___sw898___,3,g_GMLMathEpsilon,false)==0){___swc899___=2;}else if(yyCompareVal(___sw898___,4,g_GMLMathEpsilon,false)==0){___swc899___=3;}else if(yyCompareVal(___sw898___,5,g_GMLMathEpsilon,false)==0){___swc899___=4;}else if(yyCompareVal(___sw898___,6,g_GMLMathEpsilon,false)==0){___swc899___=5;}else if(yyCompareVal(___sw898___,7,g_GMLMathEpsilon,false)==0){___swc899___=6;}else if(yyCompareVal(___sw898___,8,g_GMLMathEpsilon,false)==0){___swc899___=7;
@@ -7243,7 +7255,7 @@ _other);break;}case 1:{if(!yyGetBool(global.gmlreplay_do)){gml_Script_s_end_repl
 _other,104).gmlteam_roster[__yy_gml_array_check_index(yyInst(_inst,_other,104).gmlhuman_team,yyInst(_inst,_other,104).gmlteam_roster)];var gmli=0;for(;yyfless(gmli,ds_list_size(gmlthis_roster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(gmlthis_roster,gmli);if(yyfequal(ds_map_find_value(gmlpmap,"position"),1)){{return gmlpmap;};};}};return(-4);};};{var __yy__v1387=GetWithArray(97);for(var __yy__v1388 in __yy__v1387){
 if(!__yy__v1387.hasOwnProperty(__yy__v1388))continue;var __yy__v1389=__yy__v1387[__yy__v1388];{var gmli=0;for(;yyfless(gmli,ds_list_size(__yy__v1389.gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(__yy__v1389.gmlroster,gmli);if(yyfequal(ds_map_find_value(gmlpmap,"position"),1)){{return gmlpmap;};};}};}}};}}function gml_GlobalScript_s_create_message(_inst,_other){(_inst.gmls_create_message=__yy_method(_inst,
 gml_Script_s_create_message));(_inst.gmls_message_recenter=__yy_method(_inst,gml_Script_s_message_recenter));(_inst.gmls_message_toggle=__yy_method(_inst,gml_Script_s_message_toggle));(_inst.gmls_create_message3=__yy_method(_inst,gml_Script_s_create_message3));(_inst.gmls_do_message=__yy_method(_inst,gml_Script_s_do_message));(_inst.gmls_msg=__yy_method(_inst,gml_Script_s_msg));}function gml_Script_s_create_message(_inst,_other,argument0,argument1,argument2,argument3,argument4,argument5,argument6,
-argument7,argument8,argument9){{if(yyfequal(argument8,_inst.undefined)){argument8=(-4);};if(yyfequal(argument9,_inst.undefined)){argument9=3;};}{gml_Script_slog(_inst,_other,yyfplus(yyfplus("s_create_message[",__yy_gml_errCheck(argument1)),"]"));var gmlbx1=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.33)),45);var gmlbx2=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.66)),45);var gmlbx3=yyfminus(__yy_gml_errCheck(display_get_gui_width()),
+argument7,argument8,argument9){{if(rbSimQuiet()){return;}if(yyfequal(argument8,_inst.undefined)){argument8=(-4);};if(yyfequal(argument9,_inst.undefined)){argument9=3;};}{gml_Script_slog(_inst,_other,yyfplus(yyfplus("s_create_message[",__yy_gml_errCheck(argument1)),"]"));var gmlbx1=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.33)),45);var gmlbx2=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.66)),45);var gmlbx3=yyfminus(__yy_gml_errCheck(display_get_gui_width()),
 128);var gmlbg=instance_create_layer(0,0,"PopUps",78);var gmltitle=instance_create_layer(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.5),0,"PopUps",70);var gmlmsg=instance_create_layer(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.5),yyfplus((-8),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_height()),0.5))),"PopUps",79);var gmlbtn_1=instance_create_layer(gmlbx1,224,"PopUps",34);var gmlbtn_2=instance_create_layer(gmlbx2,224,"PopUps",34);yyInst(_inst,_other,gmlbg).gmlinst_bg=gmlbg;
 yyInst(_inst,_other,gmlbg).gmlinst_title=gmltitle;yyInst(_inst,_other,gmlbg).gmlinst_msg=gmlmsg;yyInst(_inst,_other,gmlbg).gmlinst_btn_1=gmlbtn_1;yyInst(_inst,_other,gmlbg).gmlinst_btn_2=gmlbtn_2;if((yyGetBool(yyfgreater(string_length(argument2),10)))||(yyGetBool(yyfgreater(string_length(argument3),10)))){{instance_destroy(_inst,gmlbtn_1);instance_destroy(_inst,gmlbtn_2);gmlbtn_1=instance_create_layer(gmlbx1,224,"PopUps",41);gmlbtn_2=instance_create_layer(gmlbx2,224,"PopUps",41);};};yyInst(_inst,
 _other,gmlbg).gmlcolour=argument6;yyInst(_inst,_other,gmlbg).gmlalpha=argument7;yyInst(_inst,_other,gmltitle).gmlty=16;yyInst(_inst,_other,gmltitle).gmlshow_stars=false;if((yyGetBool(yyfequal(argument0,gml_Script_s_str(_inst,_other,"ui_News"))))||(yyGetBool(yyfequal(argument0,gml_Script_s_str(_inst,_other,"ui_Tip"))))){yyInst(_inst,_other,gmltitle).gmlshow_stars=true;};yyInst(_inst,_other,gmltitle).gmltext=string(argument0);yyInst(_inst,_other,gmlmsg).gmltext=argument1;yyInst(_inst,_other,gmlmsg).gmlcolour=global.gmlc_background;
@@ -7255,7 +7267,7 @@ for(var __yy__v1394 in __yy__v1393){if(!__yy__v1393.hasOwnProperty(__yy__v1394))
 if(!__yy__v1399.hasOwnProperty(__yy__v1400))continue;var __yy__v1401=__yy__v1399[__yy__v1400];__yy__v1401.x=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.33)),45);}};{var __yy__v1402=GetWithArray(_inst.gmlinst_btn_2);for(var __yy__v1403 in __yy__v1402){if(!__yy__v1402.hasOwnProperty(__yy__v1403))continue;var __yy__v1404=__yy__v1402[__yy__v1403];__yy__v1404.x=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.66)),45);}};}}function gml_Script_s_message_toggle(_inst,
 _other,argument0){{{var __yy__v1405=GetWithArray(_inst.gmlinst_bg);for(var __yy__v1406 in __yy__v1405){if(!__yy__v1405.hasOwnProperty(__yy__v1406))continue;var __yy__v1407=__yy__v1405[__yy__v1406];__yy__v1407.visible=argument0;}};{var __yy__v1408=GetWithArray(_inst.gmltitle);for(var __yy__v1409 in __yy__v1408){if(!__yy__v1408.hasOwnProperty(__yy__v1409))continue;var __yy__v1410=__yy__v1408[__yy__v1409];__yy__v1410.visible=argument0;}};{var __yy__v1411=GetWithArray(_inst.gmlinst_msg);for(var __yy__v1412 in __yy__v1411){
 if(!__yy__v1411.hasOwnProperty(__yy__v1412))continue;var __yy__v1413=__yy__v1411[__yy__v1412];__yy__v1413.visible=argument0;}};{var __yy__v1414=GetWithArray(_inst.gmlinst_btn_1);for(var __yy__v1415 in __yy__v1414){if(!__yy__v1414.hasOwnProperty(__yy__v1415))continue;var __yy__v1416=__yy__v1414[__yy__v1415];__yy__v1416.visible=argument0;}};{var __yy__v1417=GetWithArray(_inst.gmlinst_btn_2);for(var __yy__v1418 in __yy__v1417){if(!__yy__v1417.hasOwnProperty(__yy__v1418))continue;var __yy__v1419=__yy__v1417[__yy__v1418];
-__yy__v1419.visible=argument0;}};}}function gml_Script_s_create_message3(_inst,_other,argument0,argument1,argument2,argument3,argument4,argument5,argument6,argument7,argument8,argument9){{var gmlbx1=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.25)),45);var gmlbx2=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.5)),45);var gmlbx3=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.75)),45);var gmlbg=instance_create_layer(0,
+__yy__v1419.visible=argument0;}};}}function gml_Script_s_create_message3(_inst,_other,argument0,argument1,argument2,argument3,argument4,argument5,argument6,argument7,argument8,argument9){{if(rbSimQuiet()){return;}var gmlbx1=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.25)),45);var gmlbx2=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.5)),45);var gmlbx3=yyfminus(__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.75)),45);var gmlbg=instance_create_layer(0,
 0,"PopUps",78);var gmltitle=instance_create_layer(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.5),0,"PopUps",70);var gmlmsg=instance_create_layer(yyftime(__yy_gml_errCheck(display_get_gui_width()),0.5),yyfplus((-8),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(display_get_gui_height()),0.5))),"PopUps",79);var gmlbtn_1=instance_create_layer(gmlbx1,224,"PopUps",34);var gmlbtn_2=instance_create_layer(gmlbx2,224,"PopUps",34);var gmlbtn_3=instance_create_layer(gmlbx3,224,"PopUps",34);if((yyGetBool(yyfgreater(string_length(argument2),
 10)))||(yyGetBool(yyfgreater(string_length(argument3),10)))||(yyGetBool(yyfgreater(string_length(argument4),10)))){{instance_destroy(_inst,gmlbtn_1);instance_destroy(_inst,gmlbtn_2);instance_destroy(_inst,gmlbtn_3);gmlbtn_1=instance_create_layer(gmlbx1,224,"PopUps",41);gmlbtn_2=instance_create_layer(gmlbx2,224,"PopUps",41);gmlbtn_3=instance_create_layer(gmlbx3,224,"PopUps",41);};};yyInst(_inst,_other,gmlbg).gmlcolour=argument8;yyInst(_inst,_other,gmlbg).gmlalpha=argument9;yyInst(_inst,_other,gmltitle).gmlty=16;
 yyInst(_inst,_other,gmltitle).gmlshow_stars=false;if((yyGetBool(yyfequal(argument0,gml_Script_s_str(_inst,_other,"ui_News"))))||(yyGetBool(yyfequal(argument0,gml_Script_s_str(_inst,_other,"ui_Tip"))))){yyInst(_inst,_other,gmltitle).gmlshow_stars=true;};yyInst(_inst,_other,gmltitle).gmltext=string(argument0);yyInst(_inst,_other,gmlmsg).gmltext=argument1;yyInst(_inst,_other,gmlmsg).gmlcolour=global.gmlc_background;if(yyGetBool(instance_exists(98))){yyInst(_inst,_other,gmlmsg).gmlmsg_width=260;};yyInst(_inst,
@@ -7397,11 +7409,11 @@ draw_sprite_ext(_inst,80,0,_inst.x,_inst.y,gmls,gmls,0,global.gmlc_routes_rb,gml
 _other,argument0,argument1){{{var __yy__v1483=GetWithArray(97);for(var __yy__v1484 in __yy__v1483){if(!__yy__v1483.hasOwnProperty(__yy__v1484))continue;var __yy__v1485=__yy__v1483[__yy__v1484];{var gmlcount=0;var gmli=0;for(;yyfless(gmli,ds_list_size(__yy__v1485.gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(__yy__v1485.gmlroster,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;};if(yyfless(ds_map_find_value(gmlpmap,
 "condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1485,_inst,gmlpmap))){continue;};if(yyfequal(ds_map_find_value(gmlpmap,"position"),argument0)){{(g_yyPrePostObject__=gmlcount,gmlcount=(g_yyPrePostObject__ instanceof Long?gmlcount.add(1):++gmlcount),g_yyPrePostObject__);if(yyfequal(gmlcount,argument1)){return gmlpmap;};};};}};}}};return(-4);}}function gml_Script_s_get_player_by_position_from_roster(_inst,_other,argument0,argument1,argument2){{if(yyfequal(argument2,(-4))){{gml_Script_slog2(_inst,
 _other,"s_get_player_by_position. no cur_roster");return(-4);};};{var __yy__v1486=GetWithArray(97);for(var __yy__v1487 in __yy__v1486){if(!__yy__v1486.hasOwnProperty(__yy__v1487))continue;var __yy__v1488=__yy__v1486[__yy__v1487];{var gmlcount=0;var gmli=0;for(;yyfless(gmli,ds_list_size(argument2));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(argument2,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;
-};if(yyfless(ds_map_find_value(gmlpmap,"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1488,_inst,gmlpmap))){continue;};if(yyfequal(ds_map_find_value(gmlpmap,"position"),argument0)){{(g_yyPrePostObject__=gmlcount,gmlcount=(g_yyPrePostObject__ instanceof Long?gmlcount.add(1):++gmlcount),g_yyPrePostObject__);if(yyfequal(gmlcount,argument1)){return gmlpmap;};};};}};}}};return(-4);}}function gml_Script_s_get_player_kick_returner(_inst,_other,argument0){{if(yyfequal(argument0,
+};if(yyfless(ds_map_find_value(gmlpmap,"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1488,_inst,gmlpmap))){continue;};if((yyfequal(argument0,3))&&(yyGetBool(ds_map_exists(gmlpmap,"slot")))&&(yyGetBool(ds_map_find_value(gmlpmap,"slot")))){continue;};if(yyfequal(ds_map_find_value(gmlpmap,"position"),argument0)){{(g_yyPrePostObject__=gmlcount,gmlcount=(g_yyPrePostObject__ instanceof Long?gmlcount.add(1):++gmlcount),g_yyPrePostObject__);if(yyfequal(gmlcount,argument1)){return gmlpmap;};};};}};}}};return(-4);}}function gml_Script_s_get_player_kick_returner(_inst,_other,argument0){{if(yyfequal(argument0,
 (-4))){{gml_Script_slog2(_inst,_other,"s_get_player_kick_returner. no cur_roster");return(-4);};};{var __yy__v1489=GetWithArray(97);for(var __yy__v1490 in __yy__v1489){if(!__yy__v1489.hasOwnProperty(__yy__v1490))continue;var __yy__v1491=__yy__v1489[__yy__v1490];{var gmli=0;for(;yyfless(gmli,ds_list_size(argument0));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(argument0,gmli);if(yyfless(ds_map_find_value(gmlpmap,
-"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1491,_inst,gmlpmap))){continue;};if((yyGetBool(ds_map_exists(gmlpmap,"kr")))&&(yyGetBool(yyfequal(ds_map_find_value(gmlpmap,"kr"),1)))){return gmlpmap;};}};}}};return(-4);}}function gml_Script_s_get_player_by_position_from_roster_slotaware(_inst,_other,argument0,argument1,argument2){{if(yyfequal(argument2,(-4))){return(-4);};{var __yy__v1486=GetWithArray(97);for(var __yy__v1487 in __yy__v1486){if(!__yy__v1486.hasOwnProperty(__yy__v1487))continue;var __yy__v1488=__yy__v1486[__yy__v1487];{var gmlcount=0;var gmli=0;for(;yyfless(gmli,ds_list_size(argument2));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(argument2,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;};if(yyfless(ds_map_find_value(gmlpmap,"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1488,_inst,gmlpmap))){continue;};if(yyfequal(ds_map_find_value(gmlpmap,"position"),argument0)){{if((yyfequal(argument0,4))&&(yyGetBool(ds_map_exists(gmlpmap,"slot")))&&(yyGetBool(ds_map_find_value(gmlpmap,"slot")))){continue;};(g_yyPrePostObject__=gmlcount,gmlcount=(g_yyPrePostObject__ instanceof Long?gmlcount.add(1):++gmlcount),g_yyPrePostObject__);if(yyfequal(gmlcount,argument1)){return gmlpmap;};};};}};}}};return(-4);}}
+"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1491,_inst,gmlpmap))){continue;};if((yyGetBool(ds_map_exists(gmlpmap,"kr")))&&(yyGetBool(yyfequal(ds_map_find_value(gmlpmap,"kr"),1)))){return gmlpmap;};}};}}};return(-4);}}function gml_Script_s_get_player_by_position_from_roster_slotaware(_inst,_other,argument0,argument1,argument2){{if(yyfequal(argument2,(-4))){return(-4);};{var __yy__v1486=GetWithArray(97);for(var __yy__v1487 in __yy__v1486){if(!__yy__v1486.hasOwnProperty(__yy__v1487))continue;var __yy__v1488=__yy__v1486[__yy__v1487];{var gmlcount=0;var gmli=0;for(;yyfless(gmli,ds_list_size(argument2));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(argument2,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;};if(yyfless(ds_map_find_value(gmlpmap,"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1488,_inst,gmlpmap))){continue;};if(yyfequal(ds_map_find_value(gmlpmap,"position"),argument0)){{if(((yyfequal(argument0,4))||(yyfequal(argument0,3)))&&(yyGetBool(ds_map_exists(gmlpmap,"slot")))&&(yyGetBool(ds_map_find_value(gmlpmap,"slot")))){continue;};(g_yyPrePostObject__=gmlcount,gmlcount=(g_yyPrePostObject__ instanceof Long?gmlcount.add(1):++gmlcount),g_yyPrePostObject__);if(yyfequal(gmlcount,argument1)){return gmlpmap;};};};}};}}};return(-4);}}
 function gml_Script_s_best_te(_inst,_other,argument0){if(yyfequal(argument0,(-4))){return(-4);};var gmlbest=(-4);var gmlbestr=(-1);{var __bv=GetWithArray(97);for(var __bk in __bv){if(!__bv.hasOwnProperty(__bk))continue;var __bg=__bv[__bk];var gmli=0;for(;yyfless(gmli,ds_list_size(argument0));gmli++){var gmlpmap=ds_list_find_value(argument0,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;};if(yyfless(ds_map_find_value(gmlpmap,"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__bg,_inst,gmlpmap))){continue;};if(yyfnotequal(ds_map_find_value(gmlpmap,"position"),3)){continue;};var gmlr=gml_Script_s_get_player_rating(__bg,_inst,gmlpmap);if(yyfgreater(gmlr,gmlbestr)){gmlbestr=gmlr;gmlbest=gmlpmap;};};};};return gmlbest;}
-function gml_Script_s_get_player_wr_slot(_inst,_other,argument0){{if(yyfequal(argument0,(-4))){return(-4);};{var __yy__v1491=GetWithArray(97);for(var __yy__v1492 in __yy__v1491){if(!__yy__v1491.hasOwnProperty(__yy__v1492))continue;var __yy__v1493=__yy__v1491[__yy__v1492];{var gmli=0;for(;yyfless(gmli,ds_list_size(argument0));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(argument0,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;};if(yyfless(ds_map_find_value(gmlpmap,"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1493,_inst,gmlpmap))){continue;};if(yyfnotequal(ds_map_find_value(gmlpmap,"position"),4)){continue;};if((yyGetBool(ds_map_exists(gmlpmap,"slot")))&&(yyGetBool(ds_map_find_value(gmlpmap,"slot")))){return gmlpmap;};}};}}};return(-4);}}
+function gml_Script_s_get_player_wr_slot(_inst,_other,argument0){{if(yyfequal(argument0,(-4))){return(-4);};{var __yy__v1491=GetWithArray(97);for(var __yy__v1492 in __yy__v1491){if(!__yy__v1491.hasOwnProperty(__yy__v1492))continue;var __yy__v1493=__yy__v1491[__yy__v1492];{var gmli=0;for(;yyfless(gmli,ds_list_size(argument0));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(argument0,gmli);if(yyGetBool(ds_map_find_value(gmlpmap,"backup"))){continue;};if(yyfless(ds_map_find_value(gmlpmap,"condition"),0)){continue;};if(yyGetBool(gml_Script_s_player_benched(__yy__v1493,_inst,gmlpmap))){continue;};if((yyfnotequal(ds_map_find_value(gmlpmap,"position"),4))&&(yyfnotequal(ds_map_find_value(gmlpmap,"position"),3))){continue;};if((yyGetBool(ds_map_exists(gmlpmap,"slot")))&&(yyGetBool(ds_map_find_value(gmlpmap,"slot")))){return gmlpmap;};}};}}};return(-4);}}
 function gml_RoomCC_rm_profile_player_blue_PreCreate(_inst,_other){_inst.gmlis_blue_tag=true;_inst.gmlselected=false;}
 function gml_Script_btn_click_Blue_Select(_inst,_other){
     var pm = yyInst(_inst,_other,97).gmlplayer_profile;
@@ -7433,7 +7445,7 @@ function gml_Script_s_draw_blue_tag(_inst,_other){
     gml_Script_draw_hd_text(_inst, _other, bx+16, by+7, "GAD");
     draw_set_halign(0);
 }
-function gml_Script_btn_click_Slot_Select(_inst,_other){{{var __yy__v2001=GetWithArray(78);for(var __yy__v2002 in __yy__v2001){if(!__yy__v2001.hasOwnProperty(__yy__v2002))continue;return;}};var gmlpm=yyInst(_inst,_other,97).gmlplayer_profile;if(yyfequal(gmlpm,(-4))){return;};if(yyfnotequal(ds_map_find_value(gmlpm,"position"),4)){gml_Script_s_do_message(_inst,_other,"Only wide receivers can be tagged for the SLOT (WR3) role.");return;};if(yyfless(ds_list_find_index(yyInst(_inst,_other,97).gmlroster,gmlpm),0)){gml_Script_s_do_message(_inst,_other,"Only players on your roster can be tagged for the SLOT role.");return;};var gmlwas=yyGetBool(_inst.gmlselected);var gmli=0;for(;yyfless(gmli,ds_list_size(yyInst(_inst,_other,97).gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{ds_map_set(ds_list_find_value(yyInst(_inst,_other,97).gmlroster,gmli),"slot",0);}};_inst.gmlselected=!gmlwas;ds_map_set(gmlpm,"slot",_inst.gmlselected);}}
+function gml_Script_btn_click_Slot_Select(_inst,_other){{{var __yy__v2001=GetWithArray(78);for(var __yy__v2002 in __yy__v2001){if(!__yy__v2001.hasOwnProperty(__yy__v2002))continue;return;}};var gmlpm=yyInst(_inst,_other,97).gmlplayer_profile;if(yyfequal(gmlpm,(-4))){return;};if((yyfnotequal(ds_map_find_value(gmlpm,"position"),4))&&(yyfnotequal(ds_map_find_value(gmlpm,"position"),3))){gml_Script_s_do_message(_inst,_other,"Only wide receivers and tight ends can be tagged for the SLOT (WR3) role.");return;};if(yyfless(ds_list_find_index(yyInst(_inst,_other,97).gmlroster,gmlpm),0)){gml_Script_s_do_message(_inst,_other,"Only players on your roster can be tagged for the SLOT role.");return;};var gmlwas=yyGetBool(_inst.gmlselected);var gmli=0;for(;yyfless(gmli,ds_list_size(yyInst(_inst,_other,97).gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{ds_map_set(ds_list_find_value(yyInst(_inst,_other,97).gmlroster,gmli),"slot",0);}};_inst.gmlselected=!gmlwas;ds_map_set(gmlpm,"slot",_inst.gmlselected);}}
 function gml_Script_s_draw_slot_tag(_inst,_other){
     // SLOT tag drawn as a real game button (spr_button_40): normal face when off, gold face when toggled on
     var sx = _inst.x, sy = _inst.y;
@@ -7475,7 +7487,7 @@ function gml_Script_s_draw_slot_tag(_inst,_other){
     draw_set_halign(0);
     draw_set_color(16777215);
 }
-function gml_Script_s_sync_slot_tag(_inst,_other){{var gmlbtn=109102;try{var _bs=asset_get_index("spr_button_40");if(_bs>=0){yyInst(_inst,_other,gmlbtn).sprite_index=_bs;yyInst(_inst,_other,gmlbtn).rbSlotSpr=true;yyInst(_inst,_other,gmlbtn).x=48;yyInst(_inst,_other,gmlbtn).y=232;}}catch(_e){}var gmlpm=_inst.gmlpmap;var gmlnoK=(gmlpm!==(-4)&&Number(ds_map_find_value(gmlpm,"position"))===10);yyInst(_inst,_other,109103).visible=!gmlnoK;yyInst(_inst,_other,109103).gmlselected=(!gmlnoK&&gmlpm!==(-4)&&yyGetBool(ds_map_exists(gmlpm,"blue")))?yyGetBool(ds_map_find_value(gmlpm,"blue")):false;yyInst(_inst,_other,gmlbtn).gmlselected=false;yyInst(_inst,_other,gmlbtn).visible=false;if(yyfequal(gmlpm,(-4))){return;};if(yyfnotequal(ds_map_find_value(gmlpm,"position"),4)){return;};if(yyfless(ds_list_find_index(yyInst(_inst,_other,97).gmlroster,gmlpm),0)){return;};yyInst(_inst,_other,gmlbtn).visible=true;if(yyGetBool(ds_map_exists(gmlpm,"slot"))){yyInst(_inst,_other,gmlbtn).gmlselected=ds_map_find_value(gmlpm,"slot");};}}
+function gml_Script_s_sync_slot_tag(_inst,_other){{var gmlbtn=109102;try{var _bs=asset_get_index("spr_button_40");if(_bs>=0){yyInst(_inst,_other,gmlbtn).sprite_index=_bs;yyInst(_inst,_other,gmlbtn).rbSlotSpr=true;yyInst(_inst,_other,gmlbtn).x=48;yyInst(_inst,_other,gmlbtn).y=232;}}catch(_e){}var gmlpm=_inst.gmlpmap;var gmlnoK=(gmlpm!==(-4)&&Number(ds_map_find_value(gmlpm,"position"))===10);yyInst(_inst,_other,109103).visible=!gmlnoK;yyInst(_inst,_other,109103).gmlselected=(!gmlnoK&&gmlpm!==(-4)&&yyGetBool(ds_map_exists(gmlpm,"blue")))?yyGetBool(ds_map_find_value(gmlpm,"blue")):false;yyInst(_inst,_other,gmlbtn).gmlselected=false;yyInst(_inst,_other,gmlbtn).visible=false;if(yyfequal(gmlpm,(-4))){return;};if((yyfnotequal(ds_map_find_value(gmlpm,"position"),4))&&(yyfnotequal(ds_map_find_value(gmlpm,"position"),3))){return;};if(yyfless(ds_list_find_index(yyInst(_inst,_other,97).gmlroster,gmlpm),0)){return;};yyInst(_inst,_other,gmlbtn).visible=true;if(yyGetBool(ds_map_exists(gmlpm,"slot"))){yyInst(_inst,_other,gmlbtn).gmlselected=ds_map_find_value(gmlpm,"slot");};}}
 function gml_Script_s_draw_slot_badge(_inst,_other,argument0,argument1){{if(!yyGetBool(ds_map_exists(_inst.gmlpmap,"slot"))){return;};if(!yyGetBool(ds_map_find_value(_inst.gmlpmap,"slot"))){return;};var gmlx=Number(argument0)+3;var gmly=Number(argument1)+Number(_inst.sprite_height)*0.5-12;draw_set_alpha(1);draw_set_color(20600);draw_rectangle(gmlx+1,gmly,gmlx+8,gmly+9,0);draw_rectangle(gmlx,gmly+1,gmlx+9,gmly+8,0);draw_set_color(2672895);draw_rectangle(gmlx+2,gmly+1,gmlx+7,gmly+8,0);draw_rectangle(gmlx+1,gmly+2,gmlx+8,gmly+7,0);draw_set_color(9892095);draw_rectangle(gmlx+2,gmly+1,gmlx+7,gmly+1,0);draw_set_color(12890);draw_set_font(global.gmlfnt_small_flex);draw_set_halign(1);draw_set_valign(1);var gmlsc=global.gmlhd_fonts?0.19:0.75;draw_text_transformed(gmlx+4.2,gmly+4.2,"S",gmlsc,gmlsc,0);draw_set_halign(2);draw_set_color(16777215);}}
 function gml_RoomCC_rm_profile_player_slot_PreCreate(_inst,_other){{_inst.gmlis_slot_tag=true;_inst.gmlselected=false;}}function gml_GlobalScript_s_get_player_by_lname(_inst,_other,argument0){(_inst.gmls_get_player_by_lname=__yy_method(_inst,gml_Script_s_get_player_by_lname));}function gml_Script_s_get_player_by_lname(_inst,_other,argument0){{var gmllname=argument0;{var __yy__v1492=GetWithArray(97);
 for(var __yy__v1493 in __yy__v1492){if(!__yy__v1492.hasOwnProperty(__yy__v1493))continue;var __yy__v1494=__yy__v1492[__yy__v1493];{var gmli=0;for(;yyfless(gmli,ds_list_size(__yy__v1494.gmlroster));(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{var gmlpmap=ds_list_find_value(__yy__v1494.gmlroster,gmli);if(yyfequal(ds_map_find_value(gmlpmap,"lname"),gmllname)){return gmlpmap;};}};}}};return(-4);}}function gml_GlobalScript_s_get_random_player(_inst,
@@ -7533,7 +7545,7 @@ gml_Script_s_get_meeting_cost_morale));}function gml_Script_s_get_meeting_cost_m
 _other,argument0){(_inst.gmls_get_meeting_cost_condition=__yy_method(_inst,gml_Script_s_get_meeting_cost_condition));}function gml_Script_s_get_meeting_cost_condition(_inst,_other,argument0){{var gmlcost=yyfdivide(__yy_gml_errCheck(yyfminus(100,__yy_gml_errCheck(ds_map_find_value(argument0,"condition")))),5);return clamp(round(gmlcost),1,100);}}function gml_GlobalScript_s_get_meeting_cost_levelup(_inst,_other,argument0){(_inst.gmls_get_meeting_cost_levelup=__yy_method(_inst,gml_Script_s_get_meeting_cost_levelup));
 }function gml_Script_s_get_meeting_cost_levelup(_inst,_other,argument0){{return round(yyftime(__yy_gml_errCheck(real(ds_map_find_value(argument0,"xp_level"))),4));}}function gml_GlobalScript_s_get_meeting_cost_delay_retirement(_inst,_other,argument0){(_inst.gmls_get_meeting_cost_delay_retirement=__yy_method(_inst,gml_Script_s_get_meeting_cost_delay_retirement));}function gml_Script_s_get_meeting_cost_delay_retirement(_inst,_other,argument0){{var gmlpmap=argument0;var gmlyears_over=yyfminus(__yy_gml_errCheck(ds_map_find_value(gmlpmap,
 "age")),__yy_gml_errCheck(gml_Script_s_get_max_age(_inst,_other,gmlpmap)));return yyfplus(25,__yy_gml_errCheck(yyftime(yyftime(__yy_gml_errCheck(gmlyears_over),__yy_gml_errCheck(gmlyears_over)),25)));}}function gml_GlobalScript_s_get_meeting_cost_extend_contract(_inst,_other,argument0){(_inst.gmls_get_meeting_cost_extend_contract=__yy_method(_inst,gml_Script_s_get_meeting_cost_extend_contract));}function gml_Script_s_get_meeting_cost_extend_contract(_inst,_other,argument0){{var gmlpmap=argument0;if(yyGetBool(gml_Script_s_is_co_mode(_inst,
-_other))){{return gml_Script_s_get_meeting_cost_academic_coaching(_inst,_other,gmlpmap);};};var gmlcost=round(yyfplus(__yy_gml_errCheck(gml_Script_s_get_player_rating(_inst,_other,gmlpmap)),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"salary")),0.5))));gmlcost=yyfplus(gmlcost,yyftime(5,__yy_gml_errCheck(ds_map_find_value(gmlpmap,"contract"))));return gmlcost;}}function gml_GlobalScript_s_get_match_rating(_inst,_other){(_inst.gmls_get_match_rating=__yy_method(_inst,gml_Script_s_get_match_rating));
+_other))){{return gml_Script_s_get_meeting_cost_academic_coaching(_inst,_other,gmlpmap);};};var gmlcost=round(yyfplus(__yy_gml_errCheck(gml_Script_s_get_player_rating(_inst,_other,gmlpmap)),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(ds_map_find_value(gmlpmap,"salary")),0.5))));gmlcost=yyfplus(gmlcost,yyftime(5,__yy_gml_errCheck(ds_map_find_value(gmlpmap,"contract"))));return Math.max(1,Math.round(gmlcost*0.5));}}function gml_GlobalScript_s_get_match_rating(_inst,_other){(_inst.gmls_get_match_rating=__yy_method(_inst,gml_Script_s_get_match_rating));
 }function gml_Script_s_get_match_rating(_inst,_other,argument0){{var gmlmrating=0;var gmlpos=ds_map_find_value(argument0,"position");if(rbFpsApplies(argument0)){return rbFpsRating(argument0,Number(yyInst(_inst,_other,97).gmlop_matchlength));};var ___sw1240___=gmlpos;var ___swc1241___=-1;if(yyCompareVal(___sw1240___,1,g_GMLMathEpsilon,false)==0){___swc1241___=0;}else if(yyCompareVal(___sw1240___,5,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1240___,16,g_GMLMathEpsilon,false)==0){___swc1241___=1;}else if(yyCompareVal(___sw1240___,4,g_GMLMathEpsilon,false)==0){___swc1241___=2;}else if(yyCompareVal(___sw1240___,3,g_GMLMathEpsilon,false)==0){___swc1241___=3;}else if(yyCompareVal(___sw1240___,
 2,g_GMLMathEpsilon,false)==0){___swc1241___=4;}else if(yyCompareVal(___sw1240___,10,g_GMLMathEpsilon,false)==0){___swc1241___=5;}else if(yyCompareVal(___sw1240___,6,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1240___,15,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1240___,7,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1240___,8,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1240___,9,g_GMLMathEpsilon,false)==0){___swc1241___=6;}switch(___swc1241___){case 0:{gmlmrating=yyfplus(gmlmrating,ds_map_find_value(argument0,"stat_touchdowns"));gmlmrating=yyfplus(gmlmrating,
 ds_map_find_value(argument0,"stat_rush_touchdowns"));gmlmrating=yyfminus(gmlmrating,yyftime(__yy_gml_errCheck(ds_map_find_value(argument0,"stat_int")),0.5));gmlmrating=yyfminus(gmlmrating,yyftime(__yy_gml_errCheck(ds_map_find_value(argument0,"stat_sacks")),0.5));gmlmrating=yyfplus(gmlmrating,yyfdivide(__yy_gml_errCheck(ds_map_find_value(argument0,"stat_yards")),50));gmlmrating=yyfplus(gmlmrating,yyfdivide(__yy_gml_errCheck(ds_map_find_value(argument0,"stat_rush_yards")),25));gmlmrating=yyfminus(gmlmrating,
@@ -8048,7 +8060,7 @@ var gmlcam_w=camera_get_view_width(g_pBuiltIn.view_camera[__yy_gml_array_check_i
 __yy_gml_errCheck(yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(yyInst(_inst,_other,gmlball).y),300)),0.5)));if(yyGetBool(gml_Script_s_aiming(_inst,_other))){gmlcy=300;};if(yyGetBool(instance_exists(yyInst(_inst,_other,gmlball).gmlholder))){gmlcx=yyInst(_inst,_other,yyInst(_inst,_other,gmlball).gmlholder).x;};gmlcam_trackx=yyftime(__yy_gml_errCheck(gmlcam_w),__yy_gml_errCheck(yyfminus(0.5,__yy_gml_errCheck(yyftime(0.15,__yy_gml_errCheck(_inst.gmldrivedir))))));if(yyGetBool(_inst.gmlkicking)){
 gmlcam_trackx=yyftime(__yy_gml_errCheck(gmlcam_w),__yy_gml_errCheck(yyfminus(0.5,__yy_gml_errCheck(yyftime(0.25,__yy_gml_errCheck(_inst.gmldrivedir))))));};};}else {{gmlcy=0;gmllrp=0.025;var ___sw1412___=_inst.gmldrivedir;var ___swc1413___=-1;if(yyCompareVal(___sw1412___,(-1),g_GMLMathEpsilon,false)==0){___swc1413___=0;}else if(yyCompareVal(___sw1412___,1,g_GMLMathEpsilon,false)==0){___swc1413___=1;}switch(___swc1413___){case 0:{if(yyfequal(_inst.gmlpossession,_inst.gmlhuman_team)){gmlcx=yyfminus(gmlcx,
 yyftime(__yy_gml_errCheck(_inst.gmlscrimmage),20));}else {gmlcx=yyfplus(gmlcx,yyftime(__yy_gml_errCheck(_inst.gmlscrimmage),20));};break;}case 1:{if(yyfequal(_inst.gmlpossession,_inst.gmlhuman_team)){gmlcx=yyfplus(gmlcx,yyftime(__yy_gml_errCheck(_inst.gmlscrimmage),20));}else {gmlcx=yyfminus(gmlcx,yyftime(__yy_gml_errCheck(_inst.gmlscrimmage),20));};break;}};var ___sw1414___=_inst.gmlcomm_stage;var ___swc1415___=-1;if(yyCompareVal(___sw1414___,12,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1414___,
-13,g_GMLMathEpsilon,false)==0){___swc1415___=0;}else if(yyCompareVal(___sw1414___,0,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1414___,1,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1414___,17,g_GMLMathEpsilon,false)==0){___swc1415___=1;}switch(___swc1415___){case 0:{if((yyGetBool(yyfnotequal(_inst.gmlquarter,3)))&&(yyGetBool(yyfnotequal(_inst.gmlquarter,5)))){break;};}case 1:{gmllrp=0.25;gmlcx=1300;break;}default :{break;}};};};gmlcy=yyfminus(gmlcy,10);var gmlnewpos_x=lerp(camera_get_view_x(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,
+13,g_GMLMathEpsilon,false)==0){___swc1415___=0;}else if(yyCompareVal(___sw1414___,0,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1414___,1,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1414___,17,g_GMLMathEpsilon,false)==0){___swc1415___=1;}switch(___swc1415___){case 0:{if((yyGetBool(yyfnotequal(_inst.gmlquarter,3)))&&(yyGetBool(yyfnotequal(_inst.gmlquarter,5)))){break;};}case 1:{gmllrp=0.25;gmlcx=1300;break;}default :{break;}};};};gmlcy=yyfminus(gmlcy,10);if(rbSgHasBall(global.gmlmaster_ball)){gmllrp=0.6;}var gmlnewpos_x=lerp(camera_get_view_x(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,
 g_pBuiltIn.view_camera)]),yyfminus(__yy_gml_errCheck(gmlcx),__yy_gml_errCheck(gmlcam_trackx)),yyftime(__yy_gml_errCheck(gmllrp),0.5));var gmlnewpos_y=lerp(camera_get_view_y(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,g_pBuiltIn.view_camera)]),yyfminus(__yy_gml_errCheck(gmlcy),__yy_gml_errCheck(gmlcam_tracky)),yyftime(__yy_gml_errCheck(gmllrp),0.5));gmlnewpos_x=clamp(gmlnewpos_x,0,yyfminus(__yy_gml_errCheck(g_pBuiltIn.room_width),__yy_gml_errCheck(gmlcam_w)));gmlnewpos_y=clamp(gmlnewpos_y,
 0,yyfminus(__yy_gml_errCheck(g_pBuiltIn.room_height),__yy_gml_errCheck(gmlcam_h)));camera_set_view_pos(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,g_pBuiltIn.view_camera)],gmlnewpos_x,gmlnewpos_y);}}function gml_GlobalScript__poki_gameplay_start(_inst,_other){(_inst.gml_poki_gameplay_start=__yy_method(_inst,gml_Script__poki_gameplay_start));}function gml_Script__poki_gameplay_start(_inst,_other){{gml_Script_slog(_inst,_other,"_poki_gameplay_start");poki_gameplay_start();}}function gml_GlobalScript__poki_gameplay_stop(_inst,
 _other){(_inst.gml_poki_gameplay_stop=__yy_method(_inst,gml_Script__poki_gameplay_stop));}function gml_Script__poki_gameplay_stop(_inst,_other){{gml_Script_slog(_inst,_other,"_poki_gameplay_stop");poki_gameplay_stop();}}function gml_GlobalScript_s_find_gamepad(_inst,_other){(_inst.gmls_find_gamepad=__yy_method(_inst,gml_Script_s_find_gamepad));(_inst.gmls_gamepad_is_fingerprint_sensor=__yy_method(_inst,gml_Script_s_gamepad_is_fingerprint_sensor));}function gml_Script_s_find_gamepad(_inst,_other){{if(!yyGetBool(global.gmlbrowser)){
@@ -8482,12 +8494,12 @@ if(yyGetBool(global.gmlgamepad)){{_inst.gmlclicked=false;if((yyGetBool((yyGetBoo
 yyInst(_inst,_other,global.gmlgp).gmlui_selected=_inst.id;};};if((yyGetBool(yyfequal(yyInst(_inst,_other,global.gmlgp).gmlui_selected,_inst.id)))&&(yyGetBool((yyGetBool(gamepad_button_check_released(yyInst(_inst,_other,global.gmlgp).gmlslot,global.gmlgp_select)))||(yyGetBool(gamepad_button_check_released(yyInst(_inst,_other,global.gmlgp).gmlslot,_inst.gmlgp_mapped_button)))||(yyGetBool(gamepad_button_check_released(yyInst(_inst,_other,global.gmlgp).gmlslot,_inst.gmlgp_mapped_hidden)))))){{if(yyGetBool(ds_map_find_value(yyInst(_inst,
 _other,97).gmlmap_options,"op_soundfx"))){audio_play_sound(5,1,false);};script_execute(_inst,_other,_inst.gmlonClickAction);};};};}else {{if(!yyGetBool(gml_Script_s_is_touch_allowed(_inst,_other))){return;};if(yyGetBool(point_in_rectangle(device_mouse_x_to_gui(0),device_mouse_y_to_gui(0),_inst.x,_inst.y,yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck(_inst.sprite_width)),yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(_inst.sprite_height))))){{_inst.gmlhover=true;};};if(yyGetBool(_inst.gmlhover)){
 {if(yyGetBool(mouse_check_button(1))){{_inst.image_index=1;_inst.gmlclicked=true;};};if((yyGetBool(_inst.gmlclicked))&&(yyGetBool(mouse_check_button_released(1)))){{if(yyGetBool(ds_map_find_value(yyInst(_inst,_other,97).gmlmap_options,"op_soundfx"))){audio_play_sound(5,1,false);};script_execute(_inst,_other,_inst.gmlonClickAction);_inst.gmlclicked=false;};};};}else {{_inst.gmlclicked=false;};};};};}function gml_Object_obj_button_med_slim_Draw_0(_inst,_other){}function gml_Object_obj_button_med_slim_Draw_64(_inst,
-_other){draw_set_font(global.gmlfnt_small_flex);draw_set_halign(1);var gmltx=yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(_inst.sprite_width),2)));var gmlty=yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(_inst.sprite_height),2)));gmltx=yyfplus(gmltx,1);gmlty=yyfminus(gmlty,1);if(!yyGetBool(_inst.gmlactive)){{draw_sprite_ext(_inst,_inst.sprite_index,1,yyfplus(__yy_gml_errCheck(_inst.x),2),yyfminus(__yy_gml_errCheck(_inst.y),2),1,
-1,0,4210752,1);draw_set_color(4210752);if(yyGetBool(_inst.gmlimage)){draw_sprite(_inst,_inst.gmlimage,0,gmltx,gmlty);}else {gml_Script_draw_hd_text(_inst,_other,gmltx,gmlty,string_upper(_inst.gmltext));};draw_set_color(16777215);};}else {if(!yyGetBool(_inst.gmlclicked)){{var gmlf=yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),60))),1)),2);{var __yy__v1962=GetWithArray(78);for(var __yy__v1963 in __yy__v1962){if(!__yy__v1962.hasOwnProperty(__yy__v1963))continue;
-var __yy__v1964=__yy__v1962[__yy__v1963];if(yyfless(__yy__v1964.depth,_inst.depth)){gmlf=0;};}};draw_sprite(_inst,_inst.sprite_index,_inst.image_index,_inst.x,_inst.y);if(yyGetBool(gml_Script_s_is_ui_selected(_inst,_other))){draw_sprite_ext(_inst,_inst.sprite_index,_inst.image_index,_inst.x,_inst.y,1,1,0,gml_Script_s_ui_selected_color(_inst,_other),1);};draw_sprite_ext(_inst,_inst.sprite_index,2,_inst.x,_inst.y,1,1,0,_inst.gmlcolour,1);if((yyGetBool(_inst.gmlflash))&&(yyGetBool(yyfgreater(gmlf,0.5)))){
-draw_sprite_ext(_inst,_inst.sprite_index,2,_inst.x,_inst.y,1,1,0,global.gmlc_primary,1);};if(yyGetBool(_inst.gmlcontinue_icon)){draw_sprite(_inst,_inst.gmlcontinue_icon,0,yyfminus(yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck(_inst.sprite_width)),8),yyfminus(yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(_inst.sprite_height),0.5))),1));};if(yyGetBool(_inst.gmlimage)){draw_sprite(_inst,_inst.gmlimage,0,gmltx,gmlty);}else {gml_Script_draw_hd_text(_inst,_other,
-gmltx,gmlty,string_upper(_inst.gmltext));};};}else {{draw_sprite(_inst,_inst.sprite_index,_inst.image_index,_inst.x,_inst.y);draw_sprite_ext(_inst,_inst.sprite_index,2,yyfminus(__yy_gml_errCheck(_inst.x),2),yyfplus(__yy_gml_errCheck(_inst.y),2),1,1,0,_inst.gmlcolour,1);if(yyGetBool(_inst.gmlcontinue_icon)){draw_sprite(_inst,_inst.gmlcontinue_icon,0,yyfminus(yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck(_inst.sprite_width)),10),yyfplus(yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(_inst.sprite_height),
-0.5))),1));};if(yyGetBool(_inst.gmlimage)){{draw_sprite(_inst,_inst.gmlimage,0,yyfminus(__yy_gml_errCheck(gmltx),2),yyfplus(__yy_gml_errCheck(gmlty),2));};}else {{gml_Script_draw_hd_text(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),2),yyfplus(__yy_gml_errCheck(gmlty),2),string_upper(_inst.gmltext));};};};};};}function gml_Object_obj_button_med_slim_PreCreate_0(_inst,_other){event_inherited(_inst,_other);_inst.gmltext=gml_Script_s_str(_inst,_other,"");_inst.gmlonClickAction=kgml_Script_btn_click_Continue;
+_other){draw_set_font(global.gmlfnt_small_flex);draw_set_halign(1);var gmltx=yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck((sprite_get_width(_inst.sprite_index)*_inst.image_xscale)),2)));var gmlty=yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyfdivide(__yy_gml_errCheck(_inst.sprite_height),2)));gmltx=yyfplus(gmltx,1);gmlty=yyfminus(gmlty,1);if(!yyGetBool(_inst.gmlactive)){{draw_sprite_ext(_inst,_inst.sprite_index,1,yyfplus(__yy_gml_errCheck(_inst.x),2),yyfminus(__yy_gml_errCheck(_inst.y),2),_inst.image_xscale,
+1,0,4210752,1);draw_set_color(4210752);if(yyGetBool(_inst.gmlimage)){draw_sprite(_inst,_inst.gmlimage,0,gmltx,gmlty);}else {rbGLFit(_inst,_other,gmltx,gmlty,string_upper(_inst.gmltext),(sprite_get_width(_inst.sprite_index)*_inst.image_xscale)-10);};draw_set_color(16777215);};}else {if(!yyGetBool(_inst.gmlclicked)){{var gmlf=yyfdivide(__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(sin(yyfdivide(__yy_gml_errCheck(g_pBuiltIn.get_current_time()),60))),1)),2);{var __yy__v1962=GetWithArray(78);for(var __yy__v1963 in __yy__v1962){if(!__yy__v1962.hasOwnProperty(__yy__v1963))continue;
+var __yy__v1964=__yy__v1962[__yy__v1963];if(yyfless(__yy__v1964.depth,_inst.depth)){gmlf=0;};}};draw_sprite_ext(_inst,_inst.sprite_index,_inst.image_index,_inst.x,_inst.y,_inst.image_xscale,1,0,16777215,1);if(yyGetBool(gml_Script_s_is_ui_selected(_inst,_other))){draw_sprite_ext(_inst,_inst.sprite_index,_inst.image_index,_inst.x,_inst.y,_inst.image_xscale,1,0,gml_Script_s_ui_selected_color(_inst,_other),1);};draw_sprite_ext(_inst,_inst.sprite_index,2,_inst.x,_inst.y,_inst.image_xscale,1,0,_inst.gmlcolour,1);if((yyGetBool(_inst.gmlflash))&&(yyGetBool(yyfgreater(gmlf,0.5)))){
+draw_sprite_ext(_inst,_inst.sprite_index,2,_inst.x,_inst.y,_inst.image_xscale,1,0,global.gmlc_primary,1);};if(yyGetBool(_inst.gmlcontinue_icon)){draw_sprite(_inst,_inst.gmlcontinue_icon,0,yyfminus(yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck((sprite_get_width(_inst.sprite_index)*_inst.image_xscale))),8),yyfminus(yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(_inst.sprite_height),0.5))),1));};if(yyGetBool(_inst.gmlimage)){draw_sprite(_inst,_inst.gmlimage,0,gmltx,gmlty);}else {rbGLFit(_inst,_other,
+gmltx,gmlty,string_upper(_inst.gmltext),(sprite_get_width(_inst.sprite_index)*_inst.image_xscale)-10);};};}else {{draw_sprite_ext(_inst,_inst.sprite_index,_inst.image_index,_inst.x,_inst.y,_inst.image_xscale,1,0,16777215,1);draw_sprite_ext(_inst,_inst.sprite_index,2,yyfminus(__yy_gml_errCheck(_inst.x),2),yyfplus(__yy_gml_errCheck(_inst.y),2),_inst.image_xscale,1,0,_inst.gmlcolour,1);if(yyGetBool(_inst.gmlcontinue_icon)){draw_sprite(_inst,_inst.gmlcontinue_icon,0,yyfminus(yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck((sprite_get_width(_inst.sprite_index)*_inst.image_xscale))),10),yyfplus(yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(_inst.sprite_height),
+0.5))),1));};if(yyGetBool(_inst.gmlimage)){{draw_sprite(_inst,_inst.gmlimage,0,yyfminus(__yy_gml_errCheck(gmltx),2),yyfplus(__yy_gml_errCheck(gmlty),2));};}else {{rbGLFit(_inst,_other,yyfminus(__yy_gml_errCheck(gmltx),2),yyfplus(__yy_gml_errCheck(gmlty),2),string_upper(_inst.gmltext),(sprite_get_width(_inst.sprite_index)*_inst.image_xscale)-10);};};};};};}function gml_Object_obj_button_med_slim_PreCreate_0(_inst,_other){event_inherited(_inst,_other);_inst.gmltext=gml_Script_s_str(_inst,_other,"");_inst.gmlonClickAction=kgml_Script_btn_click_Continue;
 _inst.gmlcolour=new Long(4294967295,0,false);_inst.gmlhover=false;_inst.gmlclicked=false;_inst.gmlimage=(-4);_inst.gmlactive=true;_inst.gmlcontinue_icon=(-4);_inst.gmlbtn_image=(-4);_inst.gmlflash=false;_inst.gmluid=0;_inst.gmlgp_selected=0;}function gml_Object_obj_appstore_btn_Create_0(_inst,_other){if(yyGetBool(global.gmlpoki)){{instance_destroy(_inst);return;};};if(yyGetBool(global.gmlbrowser)){{if(yyGetBool(_inst.gmlgoogle)){_inst.sprite_index=216;};};}else {{if(yyGetBool(_inst.gmlgoogle)){_inst.sprite_index=218;
 }else {_inst.sprite_index=219;};};};}function gml_Object_obj_appstore_btn_Step_0(_inst,_other){if(rbBjBlocking()){return;};if(!yyGetBool(_inst.visible)){return;};if((yyGetBool(_inst.layer))&&(yyGetBool(!yyGetBool(layer_get_visible(_inst.layer))))){return;};{var __yy__v1965=GetWithArray(78);for(var __yy__v1966 in __yy__v1965){if(!__yy__v1965.hasOwnProperty(__yy__v1966))continue;var __yy__v1967=__yy__v1965[__yy__v1966];if(yyfless(__yy__v1967.depth,_inst.depth)){return;};}};{var __yy__v1968=GetWithArray(71);for(var __yy__v1969 in __yy__v1968){
 if(!__yy__v1968.hasOwnProperty(__yy__v1969))continue;var __yy__v1970=__yy__v1968[__yy__v1969];if(yyGetBool(__yy__v1970.gmlediting)){return;};}};if(!yyGetBool(gml_Script_s_is_touch_allowed(_inst,_other))){return;};_inst.gmlhover=false;if(yyGetBool(point_in_rectangle(device_mouse_x_to_gui(0),device_mouse_y_to_gui(0),_inst.x,_inst.y,yyfplus(__yy_gml_errCheck(_inst.x),__yy_gml_errCheck(_inst.sprite_width)),yyfplus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(_inst.sprite_height))))){{_inst.gmlhover=true;
@@ -8923,7 +8935,7 @@ break;}case 1:{if(yyfequal(__yy__v2086.gmlpossession,__yy__v2086.gmlhuman_team))
 false)==0||yyCompareVal(___sw1734___,1,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw1734___,17,g_GMLMathEpsilon,false)==0){___swc1735___=1;}switch(___swc1735___){case 0:{if((yyGetBool(yyfnotequal(__yy__v2086.gmlquarter,3)))&&(yyGetBool(yyfnotequal(__yy__v2086.gmlquarter,5)))){break;};}case 1:{gml_spd=0.15;gml_x=1300;break;}default :{break;}};gml_x=yyfminus(gml_x,yyftime(__yy_gml_errCheck(gml_pan),0.5));break;}default :{break;}};}}};{var __yy__v2087=GetWithArray(global.gmlmaster_ball);for(var __yy__v2088 in __yy__v2087){
 if(!__yy__v2087.hasOwnProperty(__yy__v2088))continue;var __yy__v2089=__yy__v2087[__yy__v2088];{var gmlby=__yy__v2089.y;if(yyGetBool(gml_Script_s_aiming(__yy__v2089,_inst))){gmlby=280;};gml_x=yyfminus(__yy_gml_errCheck(__yy__v2089.x),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gml_pan),0.5)));gml_y=yyfminus(__yy_gml_errCheck(gmlby),__yy_gml_errCheck(yyftime(yyftime(__yy_gml_errCheck(_inst.gmlview_height),__yy_gml_errCheck(_inst.gmlzoom)),0.5)));if((yyGetBool(__yy__v2089.gmlholder))&&(yyGetBool(gml_Script_s_aiming(__yy__v2089,
 _inst)))){{var gmldist=gml_Script_s_get_distance_to_furthest_teammate(__yy__v2089,_inst,__yy__v2089.gmlholder);gmldes_zoom=lerp(yyfdivide(600,__yy_gml_errCheck(gmldist)),2,1.6);gmldes_zoom=clamp(gmldes_zoom,1.6,2);if(yyfequal(yyInst(_inst,_other,104).gmldrivedir,(-1))){gml_x=yyfminus(__yy_gml_errCheck(__yy__v2089.x),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gml_pan),0.6)));}else {gml_x=yyfminus(__yy_gml_errCheck(__yy__v2089.x),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gml_pan),0.4)));};};};if((yyGetBool(yyInst(_inst,
-_other,104).gmlkicking))||(yyGetBool(gml_Script_s_is_kickoff(__yy__v2089,_inst,false)))){{gml_x=yyfminus(__yy_gml_errCheck(__yy__v2089.x),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gml_pan),0.5)));gmldes_zoom=1.9;};};}}};if(!yyGetBool(ds_map_find_value(yyInst(_inst,_other,97).gmlmap_options,"op_zoom"))){_inst.gmlzoom=2;}else {_inst.gmlzoom=lerp(_inst.gmlzoom,gmldes_zoom,0.02);};camera_set_view_size(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,g_pBuiltIn.view_camera)],yyftime(__yy_gml_errCheck(_inst.gmlview_width),
+_other,104).gmlkicking))||(yyGetBool(gml_Script_s_is_kickoff(__yy__v2089,_inst,false)))){{gml_x=yyfminus(__yy_gml_errCheck(__yy__v2089.x),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gml_pan),0.5)));gmldes_zoom=1.9;};};}}};if(rbSgHasBall(global.gmlmaster_ball)){gml_spd=0.3;}if(!yyGetBool(ds_map_find_value(yyInst(_inst,_other,97).gmlmap_options,"op_zoom"))){_inst.gmlzoom=2;}else {_inst.gmlzoom=lerp(_inst.gmlzoom,gmldes_zoom,0.02);};camera_set_view_size(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,g_pBuiltIn.view_camera)],yyftime(__yy_gml_errCheck(_inst.gmlview_width),
 __yy_gml_errCheck(_inst.gmlzoom)),yyftime(__yy_gml_errCheck(_inst.gmlview_height),__yy_gml_errCheck(_inst.gmlzoom)));var gmlcam_w=camera_get_view_width(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,g_pBuiltIn.view_camera)]);var gmlcam_h=camera_get_view_height(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,g_pBuiltIn.view_camera)]);gml_x=clamp(lerp(gml_cur_x,gml_x,gml_spd),0,yyfminus(__yy_gml_errCheck(g_pBuiltIn.room_width),__yy_gml_errCheck(gmlcam_w)));gml_y=clamp(lerp(gml_cur_y,gml_y,gml_spd),
 0,yyfminus(__yy_gml_errCheck(g_pBuiltIn.room_height),__yy_gml_errCheck(gmlcam_h)));camera_set_view_pos(g_pBuiltIn.view_camera[__yy_gml_array_check_index(0,g_pBuiltIn.view_camera)],gml_x,gml_y);}function gml_Object_obj_camera_Other_4(_inst,_other){g_pBuiltIn.set_view_enable(true);g_pBuiltIn.view_visible[__yy_gml_array_check_index_set(0)]=true;}function gml_Object_obj_camera_Other_5(_inst,_other){if(!yyGetBool(global.gmlbrowser)){{window_set_size(960,540);display_set_gui_size(480,270);surface_resize(g_pBuiltIn.application_surface,
 480,270);window_center();};};}function gml_Object_obj_scanlines_Create_0(_inst,_other){gml_Script_slog(_inst,_other,"------> Create: obj_scanlines");{var __yy__v2090=GetWithArray(97);for(var __yy__v2091 in __yy__v2090){if(!__yy__v2090.hasOwnProperty(__yy__v2091))continue;var __yy__v2092=__yy__v2090[__yy__v2091];_inst.gmlon=ds_map_find_value(__yy__v2092.gmlmap_options,"op_scanlines");}};}function gml_Object_obj_scanlines_Draw_75(_inst,_other){var gmlgw=display_get_gui_width();var gmlgh=display_get_gui_height();
@@ -8985,7 +8997,7 @@ gmlloss);_inst.gmldefense_success=__yy_gml_array_check(_inst.gmldefense_success,
 1);_inst.gmlscrimmage=yyfminus(_inst.gmlscrimmage,gmlloss);_inst.gmldefense_success=__yy_gml_array_check(_inst.gmldefense_success,2468983040);_inst.gmldefense_success[__yy_gml_array_check_index_set(_inst.gmldefensive_cover)]=yyfplus(_inst.gmldefense_success[__yy_gml_array_check_index_set(_inst.gmldefensive_cover)],1);};};};};};};gml_Script_slog(_inst,_other,"Alarm[0]=BALL_DOWN");gml_Script_s_start_replay(_inst,_other,0);break;}case 6:{_inst.gmldown=yyfplus(_inst.gmldown,1);gml_Script_slog(_inst,_other,
 "Alarm[0]=BALL_INCOMPLETE");gml_Script_s_start_replay(_inst,_other,0);break;}case 7:{if(yyfequal(_inst.gmldrivedir,1)){{var gmlloss=yyfdivide(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(_inst.gmlx_scrim),__yy_gml_errCheck(yyInst(_inst,_other,gmlball).gmlxdead))),20);_inst.gmlyards=yyfplus(_inst.gmlyards,gmlloss);_inst.gmldown=yyfplus(_inst.gmldown,1);_inst.gmlscrimmage=yyfminus(_inst.gmlscrimmage,gmlloss);};}else {{var gmlloss=yyfdivide(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(yyInst(_inst,_other,
 gmlball).gmlxdead),__yy_gml_errCheck(_inst.gmlx_scrim))),20);_inst.gmlyards=yyfplus(_inst.gmlyards,gmlloss);_inst.gmldown=yyfplus(_inst.gmldown,1);_inst.gmlscrimmage=yyfminus(_inst.gmlscrimmage,gmlloss);};};gml_Script_slog(_inst,_other,"Alarm[0]=BALL_SACKED");gml_Script_s_start_replay(_inst,_other,0);break;}case 8:{gml_Script_s_start_replay(_inst,_other,8);break;}case 9:{gml_Script_s_start_replay(_inst,_other,3);break;}case 10:{gml_Script_s_start_replay(_inst,_other,6);break;}case 11:{gml_Script_s_start_replay(_inst,
-_other,7);break;}case 12:{gml_Script_slog(_inst,_other,"BALL_PRACTICE_SUCCESS");gml_Script_s_end_match(_inst,_other,true);break;}case 13:{break;}case 14:{break;}};}function gml_Object_obj_controller_Alarm_1(_inst,_other){_inst.gmlcomm_proceed=true;}function rbSimBtnState(_inst,_other){var m=yyInst(_inst,_other,97);if(!m||_inst.gmlstate==10||m.gmlplayerteamindex==-1)return 0;if(gml_Script_s_simming_action(_inst,_other))return 1;if(_inst.gmlstate!=3&&_inst.gmlpossession!=_inst.gmlhuman_team)return 2;return 0;}
+_other,7);break;}case 12:{gml_Script_slog(_inst,_other,"BALL_PRACTICE_SUCCESS");gml_Script_s_end_match(_inst,_other,true);break;}case 13:{break;}case 14:{break;}};}function gml_Object_obj_controller_Alarm_1(_inst,_other){_inst.gmlcomm_proceed=true;}function rbSimBtnState(_inst,_other){var m=yyInst(_inst,_other,97);if(!m||_inst.gmlstate==10||m.gmlplayerteamindex==-1)return 0;if(gml_Script_s_simming_action(_inst,_other))return 1;if(_inst.gmlstate!=3&&_inst.gmlpossession!=_inst.gmlhuman_team){if(yyGetBool(gml_Script_s_is_kickoff(_inst,_other,true)))return 0;return 2;}return 0;}
 function rbSimBtnPos(){return {x:16,y:display_get_gui_height()-16-sprite_get_height(90)};}
 function rbSimBtnStep(_inst,_other){var t=rbSimBtnState(_inst,_other);if(t==1&&_inst.gmlstate==1&&_inst.gmlskip_half&&!_inst.gmlcomm_proceed&&_inst.gmlcomm_stage>=1&&_inst.gmlcomm_stage<=11){window.rbWd=(window.rbWd||0)+1;if(window.rbWd>20){window.rbWd=0;_inst.gmlcomm_proceed=true;if(_inst.alarm)_inst.alarm[1]=1;}}else{window.rbWd=0;}if(!t)return;if(!mouse_check_button_pressed(1))return;var p=rbSimBtnPos(),mx=device_mouse_x_to_gui(0),my=device_mouse_y_to_gui(0);if(!point_in_rectangle(mx,my,p.x,p.y,p.x+96,p.y+32))return;var m=yyInst(_inst,_other,97);if(t==1){m.gmlsim_action=false;var l=GetWithArray(29);for(var k in l){if(!l.hasOwnProperty(k))continue;instance_destroy(l[k]);}}else{m.gmlsim_action=true;}}
 function rbSimBtnDraw(_inst,_other){var t=rbSimBtnState(_inst,_other);if(!t)return;var p=rbSimBtnPos();draw_sprite_ext(_inst,t==1?404:403,0,p.x,p.y,1,1,0,16777215,1);}
@@ -9025,7 +9037,7 @@ __yy__v2113.gmlteam_score)],__yy__v2113.gmlteam_score[__yy_gml_array_check_index
 {gml_Script_s_set_anim(_inst,_other,16);_inst.gmljforce=0;};}else {if((yyGetBool(!yyGetBool(path_exists(_inst.gmlmy_route))))&&(yyGetBool(yyfnotequal(yyInst(_inst,_other,gmlball).gmlstate,5)))){{_inst.gmljforce=0.1;};};};};};if((yyGetBool(yyfless(_inst.x,142.5)))||(yyGetBool(yyfgreater(_inst.x,2457.5)))){{if(yyfnotequal(yyInst(_inst,_other,gmlball).gmlstate,5)){_inst.gmljforce=0;};};};};};var ___sw1788___=_inst.gmlanim;var ___swc1789___=-1;if(yyCompareVal(___sw1788___,4,g_GMLMathEpsilon,false)==0){
 ___swc1789___=0;}else if(yyCompareVal(___sw1788___,5,g_GMLMathEpsilon,false)==0){___swc1789___=1;}else if(yyCompareVal(___sw1788___,6,g_GMLMathEpsilon,false)==0){___swc1789___=2;}else if(yyCompareVal(___sw1788___,7,g_GMLMathEpsilon,false)==0){___swc1789___=3;}else if(yyCompareVal(___sw1788___,10,g_GMLMathEpsilon,false)==0){___swc1789___=4;}else if(yyCompareVal(___sw1788___,11,g_GMLMathEpsilon,false)==0){___swc1789___=5;}else if(yyCompareVal(___sw1788___,12,g_GMLMathEpsilon,false)==0){___swc1789___=6;}
 else if(yyCompareVal(___sw1788___,19,g_GMLMathEpsilon,false)==0){___swc1789___=7;}switch(___swc1789___){case 0:{_inst.gmljforce=0;break;}case 1:{_inst.gmljforce=0;break;}case 2:{_inst.gmljforce=0;break;}case 3:{_inst.gmljforce=0;break;}case 4:{_inst.gmljforce=0;break;}case 5:{_inst.gmljforce=0;break;}case 6:{_inst.gmljforce=0;break;}case 7:{_inst.gmljforce=0;break;}};if(yyGetBool(_inst.gmldead)){_inst.gmljforce=0;};if((yyGetBool(yyfequal(_inst.gmlposition,2)))&&(yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlstate,
-19)))&&(yyGetBool(yyfequal(_inst.gmljforce,1)))){_inst.gmljforce=0.5;};if(yyGetBool(yyInst(_inst,_other,gmlball).gmlis_dead)){{if(!yyGetBool((yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlholder,_inst.id)))&&(yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlstate,6))))){_inst.gmljforce=0;};};};if(window.rbJV&&yyGetBool(yyfequal(_inst.gmlposition,1))&&yyGetBool(yyfequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlholder,_inst.id))&&yyGetBool(gml_Script_s_can_throw(_inst,_other))){var rbm=Math.sqrt(window.rbJV[0]*window.rbJV[0]+window.rbJV[1]*window.rbJV[1])/window.rbJV[2];if(rbm>0.15){_inst.gmljdir=Math.atan2(-window.rbJV[1],window.rbJV[0])*180/Math.PI;if(_inst.gmljdir<0){_inst.gmljdir+=360;}_inst.gmljforce=Math.min(rbm,1);}}if(yyGetBool(yyfequal(_inst.gmlposition,1))&&yyGetBool(_inst.gmloffense)&&yyGetBool(yyfequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlholder,_inst.id))&&yyGetBool(yyfnotequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlstate,0))&&!yyGetBool(gml_Script_s_can_throw(_inst,_other))&&yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlstate,2))){gml_Script_s_qb_run(yyInst(_inst,_other,global.gmlmaster_ball),_other,true);}if(yyGetBool(yyfequal(_inst.gmlposition,1))&&yyGetBool(yyfequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlholder,_inst.id))&&yyGetBool(gml_Script_s_can_throw(_inst,_other))){var rbf=Math.sqrt(_inst.hspeed*_inst.hspeed+_inst.vspeed*_inst.vspeed);if(window.rbJV&&rbf>0.3){_inst.sprite_index=gml_Script_s_spr_from_bt(_inst,_other,40,_inst.gmlbody_type);_inst.image_speed=Math.min(rbf,1);_inst.image_xscale=(_inst.gmlfacing==-1)?-2:2;_inst.rbRun=true;}else if(_inst.rbRun){if(yyGetBool(yyfequal(_inst.gmlanim,2))||yyGetBool(yyfequal(_inst.gmlanim,11))){gml_Script_s_set_anim(_inst,_other,0);}_inst.rbRun=false;}}if(yyfnotequal(_inst.gmlanim,3)){{var gmlveffect=(yyGetBool(yyfequal(_inst.gmlposition,1))?0.4:0.75);_inst.hspeed=yyfplus(_inst.hspeed,yyftime(yyftime(__yy_gml_errCheck(dcos(_inst.gmljdir)),__yy_gml_errCheck(_inst.gmljforce)),__yy_gml_errCheck(_inst.gmlmy_accel)));
+19)))&&(yyGetBool(yyfequal(_inst.gmljforce,1)))){_inst.gmljforce=0.5;};if(yyGetBool(yyInst(_inst,_other,gmlball).gmlis_dead)){{if(!yyGetBool((yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlholder,_inst.id)))&&(yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlstate,6))))){_inst.gmljforce=0;};};};if(window.rbJV&&yyGetBool(yyfequal(_inst.gmlposition,1))&&yyGetBool(yyfequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlholder,_inst.id))&&yyGetBool(gml_Script_s_can_throw(_inst,_other))){var rbm=Math.sqrt(window.rbJV[0]*window.rbJV[0]+window.rbJV[1]*window.rbJV[1])/window.rbJV[2];if(rbm>0.15){_inst.gmljdir=Math.atan2(-window.rbJV[1],window.rbJV[0])*180/Math.PI;if(_inst.gmljdir<0){_inst.gmljdir+=360;}_inst.gmljforce=Math.min(rbm,1);}}if(yyGetBool(yyfequal(_inst.gmlposition,1))&&yyGetBool(_inst.gmloffense)&&yyGetBool(yyfequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlholder,_inst.id))&&yyGetBool(yyfnotequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlstate,0))&&!yyGetBool(gml_Script_s_can_throw(_inst,_other))&&yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlstate,2))){gml_Script_s_qb_run(yyInst(_inst,_other,global.gmlmaster_ball),_other,true);}if(yyGetBool(yyfequal(_inst.gmlposition,1))&&yyGetBool(yyfequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlholder,_inst.id))&&yyGetBool(gml_Script_s_can_throw(_inst,_other))){var rbf=Math.sqrt(_inst.hspeed*_inst.hspeed+_inst.vspeed*_inst.vspeed);if(window.rbJV&&rbf>0.3){_inst.sprite_index=gml_Script_s_spr_from_bt(_inst,_other,40,_inst.gmlbody_type);_inst.image_speed=Math.min(rbf,1);_inst.image_xscale=(_inst.gmlfacing==-1)?-2:2;_inst.rbRun=true;}else if(_inst.rbRun){if(yyGetBool(yyfequal(_inst.gmlanim,2))||yyGetBool(yyfequal(_inst.gmlanim,11))){gml_Script_s_set_anim(_inst,_other,0);}_inst.rbRun=false;}}rbSgBoost(_inst,_other);if(yyfnotequal(_inst.gmlanim,3)){{var gmlveffect=(yyGetBool(yyfequal(_inst.gmlposition,1))?0.4:0.75);_inst.hspeed=yyfplus(_inst.hspeed,yyftime(yyftime(__yy_gml_errCheck(dcos(_inst.gmljdir)),__yy_gml_errCheck(_inst.gmljforce)),__yy_gml_errCheck(_inst.gmlmy_accel)));
 _inst.vspeed=yyfplus(_inst.vspeed,yyftime(yyftime(yyftime(__yy_gml_errCheck(dsin(__yy_gml_errCheck(-__yy_gml_errCheck(_inst.gmljdir)))),__yy_gml_errCheck(_inst.gmljforce)),__yy_gml_errCheck(_inst.gmlmy_accel)),__yy_gml_errCheck(gmlveffect)));};};if((yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlholder,_inst.id)))&&(yyGetBool((yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlstate,5)))||(yyGetBool(yyfequal(yyInst(_inst,_other,gmlball).gmlstate,9)))||(yyGetBool(yyfequal(yyInst(_inst,_other,
 gmlball).gmlstate,10)))))){{var gmlbx=yyInst(_inst,_other,gmlball).x;if(yyfequal(_inst.gmlmin_x,(-1))){_inst.gmlmin_x=gmlbx;}else {if((yyGetBool(yyfless(_inst.hspeed,0)))&&(yyGetBool(yyfless(gmlbx,_inst.gmlmin_x)))){_inst.gmlmin_x=gmlbx;};};if(yyfequal(_inst.gmlmax_x,(-1))){_inst.gmlmax_x=gmlbx;}else {if((yyGetBool(yyfgreater(_inst.hspeed,0)))&&(yyGetBool(yyfgreater(gmlbx,_inst.gmlmax_x)))){_inst.gmlmax_x=gmlbx;};};};};if(!yyGetBool(yyInst(_inst,_other,97).gmlgamepractice)){{if((yyGetBool(yyfequal(yyInst(_inst,
 _other,gmlball).gmlholder,_inst.id)))&&(yyGetBool(yyfequal(_inst.gmlanim,2)))&&(yyGetBool(yyfgreater(_inst.gmlmy_accel,0.060125000000000005)))){{var gmldecel=0.9999;var gmlstam=yyfminus(11,__yy_gml_errCheck(_inst.gmlstamina));gmldecel=yyfminus(gmldecel,yyftime(__yy_gml_errCheck(gmlstam),5E-05));_inst.gmlmy_accel=yyftime(_inst.gmlmy_accel,gmldecel);};};};};_inst.hspeed=yyftime(_inst.hspeed,0.94);_inst.vspeed=yyftime(_inst.vspeed,0.94);if(yyGetBool(_inst.gmldead)){{var gmlgetup=2500;if(!yyGetBool(_inst.gmloffense)){
@@ -9092,7 +9104,7 @@ var ___sw1830___=yyInst(_inst,_other,104).gmlkicking;var ___swc1831___=-1;if(yyC
 _other);if(yyfnotequal(_inst.gmlstate,gmlold_ballstate)){{gml_Script_s_create_match_message(_inst,_other,_inst.gmlstate);};};if(yyfgreater(abs(yyfminus(__yy_gml_errCheck(gmllastx),__yy_gml_errCheck(_inst.x))),1)){{var gmli=20;for(;yyfgreater(gmli,0);(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.subtract(1):--gmli),g_yyPrePostObject__)){{_inst.gmll_blur=__yy_gml_array_check(_inst.gmll_blur,2127366110);_inst.gmll_blur[__yy_gml_array_check_index_chain(gmli,_inst.gmll_blur)][__yy_gml_array_check_index_set(0)]=_inst.gmll_blur[__yy_gml_array_check_index(yyfminus(__yy_gml_errCheck(gmli),
 1),_inst.gmll_blur)][__yy_gml_array_check_index(0,_inst.gmll_blur[~~yyfminus(__yy_gml_errCheck(gmli),1)])];_inst.gmll_blur[__yy_gml_array_check_index_chain(gmli,_inst.gmll_blur)][__yy_gml_array_check_index_set(1)]=_inst.gmll_blur[__yy_gml_array_check_index(yyfminus(__yy_gml_errCheck(gmli),1),_inst.gmll_blur)][__yy_gml_array_check_index(1,_inst.gmll_blur[~~yyfminus(__yy_gml_errCheck(gmli),1)])];}};_inst.gmll_blur=__yy_gml_array_check(_inst.gmll_blur,2127366110);_inst.gmll_blur[__yy_gml_array_check_index_chain(0,
 _inst.gmll_blur)][__yy_gml_array_check_index_set(0)]=_inst.x;_inst.gmll_blur[__yy_gml_array_check_index_chain(0,_inst.gmll_blur)][__yy_gml_array_check_index_set(1)]=yyfminus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(yyfplus(__yy_gml_errCheck(_inst.gmlheight),1)));};};if((yyGetBool(_inst.gmlholder))||(yyGetBool(yyfless(_inst.gmlvelocity,1)))){_inst.image_index=0;};_inst.gmlhidden=false;{var __yy__v2114=GetWithArray(_inst.gmlholder);for(var __yy__v2115 in __yy__v2114){if(!__yy__v2114.hasOwnProperty(__yy__v2115))continue;
-var __yy__v2116=__yy__v2114[__yy__v2115];{if(yyGetBool(gml_Script_s_sprite_holding_ball(__yy__v2116,_inst,__yy__v2116.sprite_index))){_inst.gmlhidden=true;};}}};gml_Script_s_update_my_shadow(_inst,_other);if(yyGetBool(_inst.gmlhidden)){layer_sprite_y(_inst.gmlmy_shadow,(-99999));};}function gml_Object_obj_ball_Step_2(_inst,_other){if((yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlstate,2)))&&(yyGetBool(yyfnotequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlstate,0)))&&(yyGetBool(yyfequal(yyfmod(__yy_gml_errCheck(global.gmlreplay_tick),
+var __yy__v2116=__yy__v2114[__yy__v2115];{if(yyGetBool(gml_Script_s_sprite_holding_ball(__yy__v2116,_inst,__yy__v2116.sprite_index))){_inst.gmlhidden=true;};}}};gml_Script_s_update_my_shadow(_inst,_other);if(yyGetBool(_inst.gmlhidden)){layer_sprite_y(_inst.gmlmy_shadow,(-99999));};}function gml_Object_obj_ball_Step_2(_inst,_other){try{if(rbSgHasBall(_inst.id)&&Number(yyInst(_inst,_other,104).gmlstate)===2){var rbs=Number(_inst.gmlstate);if(rbs===5||rbs===9||rbs===10||rbs===19||rbs===20||rbs===21){gml_Script_s_update_ball_offset(_inst,_other);}}}catch(_e){}if((yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlstate,2)))&&(yyGetBool(yyfnotequal(yyInst(_inst,_other,global.gmlmaster_ball).gmlstate,0)))&&(yyGetBool(yyfequal(yyfmod(__yy_gml_errCheck(global.gmlreplay_tick),
 4),0)))){gml_Script_s_record_frame(_inst,_other);};}function gml_Object_obj_ball_Draw_0(_inst,_other){if(yyGetBool(_inst.gmlhidden)){return;};if((yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlstate,2)))&&(yyGetBool((yyGetBool(yyfequal(_inst.gmlstate,0)))||(yyGetBool(yyfequal(_inst.gmlstate,1)))))&&(yyGetBool(!yyGetBool(yyInst(_inst,_other,104).gmlkicking)))){{var ___sw1834___=yyInst(_inst,_other,104).gmldrivedir;var ___swc1835___=-1;if(yyCompareVal(___sw1834___,(-1),g_GMLMathEpsilon,false)==0){___swc1835___=0;
 }else if(yyCompareVal(___sw1834___,1,g_GMLMathEpsilon,false)==0){___swc1835___=1;}switch(___swc1835___){case 0:{draw_sprite_ext(_inst,_inst.sprite_index,_inst.image_index,yyfplus(__yy_gml_errCheck(_inst.x),4),yyfminus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(_inst.gmlheight)),2,2,_inst.gmlrotation,16777215,1);break;}case 1:{draw_sprite_ext(_inst,_inst.sprite_index,_inst.image_index,yyfminus(__yy_gml_errCheck(_inst.x),4),yyfminus(__yy_gml_errCheck(_inst.y),__yy_gml_errCheck(_inst.gmlheight)),2,2,
 _inst.gmlrotation,16777215,1);break;}};};}else {{if((yyGetBool(yyfequal(yyInst(_inst,_other,104).gmlstate,2)))&&(yyGetBool(yyfequal(_inst.gmlstate,3)))){{var gmla=min(yyftime(__yy_gml_errCheck(_inst.gmlheight),0.005),0.09);var gmli=0;for(;yyfless(gmli,20);(g_yyPrePostObject__=gmli,gmli=(g_yyPrePostObject__ instanceof Long?gmli.add(1):++gmli),g_yyPrePostObject__)){{draw_sprite_ext(_inst,14,_inst.image_index,_inst.gmll_blur[__yy_gml_array_check_index(gmli,_inst.gmll_blur)][__yy_gml_array_check_index(0,
@@ -9553,8 +9565,55 @@ yyInst(_inst,_other,100545).gmltext=string(gml_Script_s_get_meeting_cost_conditi
 100545).gmlactive=false;};_inst.gmlretirement=false;var gmlm4Image=yyInst(_inst,_other,100547).gmlimage;if(yyfequal(ds_map_find_value(_inst.gmlpmap,"age"),gml_Script_s_rookie_age_internal(_inst,_other))){{yyInst(_inst,_other,100547).gmlactive=false;yyInst(_inst,_other,100547).gmltext=gml_Script_s_str(_inst,_other,"ui_Rookie");yyInst(_inst,_other,100547).gmlimage=(-1);};}else {if(yyfgreaterequal(ds_map_find_value(_inst.gmlpmap,"age"),gml_Script_s_get_max_age_normal(_inst,_other,_inst.gmlpmap))){{_inst.gmlretirement=true;
 yyInst(_inst,_other,100537).gmltext=gml_Script_s_str(_inst,_other,"ui_DelayRetirement");yyInst(_inst,_other,100547).gmltext=max(gml_Script_s_get_meeting_cost_extend_contract(_inst,_other,_inst.gmlpmap),gml_Script_s_get_meeting_cost_delay_retirement(_inst,_other,_inst.gmlpmap));if((yyGetBool(yyfless(ds_map_find_value(_inst.gmlpmap,"age"),gml_Script_s_get_max_age(_inst,_other,_inst.gmlpmap))))||(yyGetBool(yyfgreater(ds_map_find_value(_inst.gmlpmap,"age"),yyfplus(__yy_gml_errCheck(gml_Script_s_get_max_age_normal(_inst,
 _other,_inst.gmlpmap)),4))))){yyInst(_inst,_other,100547).gmlactive=false;};};}else {{yyInst(_inst,_other,100547).gmltext=gml_Script_s_get_meeting_cost_extend_contract(_inst,_other,_inst.gmlpmap);if(yyfgreater(ds_map_find_value(_inst.gmlpmap,"contract"),4)){yyInst(_inst,_other,100547).gmlactive=false;}else {if(yyfgreater(yyfplus(__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"age")),__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"contract"))),gml_Script_s_get_max_age(_inst,_other,_inst.gmlpmap))){
-yyInst(_inst,_other,100547).gmlactive=false;};};};};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{yyInst(_inst,_other,100547).gmltext=gml_Script_s_get_meeting_cost_extend_contract(_inst,_other,_inst.gmlpmap);yyInst(_inst,_other,100547).gmlactive=true;yyInst(_inst,_other,100547).gmlimage=gmlm4Image;yyInst(_inst,_other,100541).gmltext=gml_Script_s_gpa_string(_inst,_other,_inst.gmlpmap);yyInst(_inst,_other,100541).gmltitle=gml_Script_s_str(_inst,_other,"ui_GPA");};};var gmlinj=0;var gmlinjcon=ds_map_find_value(_inst.gmlpmap,"condition");if(yyfless(gmlinjcon,0)){gmlinj=Math.round(-gmlinjcon);};var gmlisir=((yyInst(_inst,_other,97).gmlir_list!==undefined)&&(ds_list_find_index(yyInst(_inst,_other,97).gmlir_list,_inst.gmlpmap)>=0));if(gmlinj>0||gmlisir){yyInst(_inst,_other,100532).y=32;yyInst(_inst,_other,100532).image_yscale=1.5625;yyInst(_inst,_other,100539).y=48;yyInst(_inst,_other,100535).y=48;yyInst(_inst,_other,100543).y=48;yyInst(_inst,_other,100538).y=84;yyInst(_inst,_other,100534).y=84;yyInst(_inst,_other,100545).y=84;yyInst(_inst,_other,100540).y=120;yyInst(_inst,_other,100536).y=120;yyInst(_inst,_other,100546).y=120;yyInst(_inst,_other,100541).y=156;yyInst(_inst,_other,100537).y=156;yyInst(_inst,_other,100547).y=156;yyInst(_inst,_other,199991).gmltitle="Injured";yyInst(_inst,_other,199991).gmltext=(gmlinj==1)?"1 week":(gmlinj+" weeks");yyInst(_inst,_other,199991).gmltext_col=255;yyInst(_inst,_other,199992).gmltext="Move to IR";yyInst(_inst,_other,199993).gmltext="Move";yyInst(_inst,_other,199993).gmlonClickAction=function(_i,_o){var gmlpm=yyInst(_i,_o,97).gmlplayer_profile;var gmlnm=ds_map_find_value(gmlpm,"fname")+" "+ds_map_find_value(gmlpm,"lname");gml_Script_s_create_message(_i,_o,gml_Script_s_str(_i,_o,"ui_Meeting"),"Are you sure you want to place "+gmlnm+" on Injured Reserve?",gml_Script_s_str(_i,_o,"ui_No"),gml_Script_s_str(_i,_o,"ui_Yes"),kgml_Script_s_msg_clear,function(_i2,_o2){var gmlm=yyInst(_i2,_o2,97);var gmlp=gmlm.gmlplayer_profile;var gmlx=ds_list_find_index(gmlm.gmlroster,gmlp);if(gmlx>=0){ds_list_delete(gmlm.gmlroster,gmlx);if(gmlm.gmlir_list===undefined){gmlm.gmlir_list=ds_list_create();};ds_list_add(gmlm.gmlir_list,gmlp);};gml_Script_s_msg_clear(_i2,_o2);if(instance_exists(199993)){yyInst(_i2,_o2,199993).gmltext="Moved";yyInst(_i2,_o2,199993).gmlactive=false;};},global.gmlc_background,1);};if(gmlisir){yyInst(_inst,_other,199993).gmltext="Moved";yyInst(_inst,_other,199993).gmlactive=false;}else if(gmlinj<4){yyInst(_inst,_other,199993).gmlactive=false;};}else{yyInst(_inst,_other,199991).visible=false;yyInst(_inst,_other,199992).visible=false;yyInst(_inst,_other,199993).visible=false;yyInst(_inst,_other,199993).gmlactive=false;};yyInst(_inst,_other,100549).visible=false;
-if((yyGetBool(ds_map_exists(_inst.gmlpmap,"meetingdone")))&&(yyGetBool(yyfgreater(ds_map_find_value(_inst.gmlpmap,"meetingdone"),0)))){{yyInst(_inst,_other,100549).gmltext=string_replace(gml_Script_s_str(_inst,_other,"msg_MeetingDone"),"$playername",gmlname);yyInst(_inst,_other,100549).visible=true;yyInst(_inst,_other,100543).gmlactive=false;yyInst(_inst,_other,100545).gmlactive=false;yyInst(_inst,_other,100546).gmlactive=false;yyInst(_inst,_other,100547).gmlactive=false;};};}function gml_Object_obj_meeting_player_PreCreate_0(_inst,
+yyInst(_inst,_other,100547).gmlactive=false;};};};};};if(yyGetBool(gml_Script_s_is_co_mode(_inst,_other))){{yyInst(_inst,_other,100547).gmltext=gml_Script_s_get_meeting_cost_extend_contract(_inst,_other,_inst.gmlpmap);yyInst(_inst,_other,100547).gmlactive=true;yyInst(_inst,_other,100547).gmlimage=gmlm4Image;yyInst(_inst,_other,100541).gmltext=gml_Script_s_gpa_string(_inst,_other,_inst.gmlpmap);yyInst(_inst,_other,100541).gmltitle=gml_Script_s_str(_inst,_other,"ui_GPA");};};var gmlinj=0;var gmlinjcon=ds_map_find_value(_inst.gmlpmap,"condition");if(yyfless(gmlinjcon,0)){gmlinj=Math.round(-gmlinjcon);};var gmlisir=((yyInst(_inst,_other,97).gmlir_list!==undefined)&&(ds_list_find_index(yyInst(_inst,_other,97).gmlir_list,_inst.gmlpmap)>=0));if(gmlinj>0||gmlisir){yyInst(_inst,_other,100532).y=32;yyInst(_inst,_other,100532).image_yscale=1.5625;yyInst(_inst,_other,100539).y=48;yyInst(_inst,_other,100535).y=48;yyInst(_inst,_other,100543).y=48;yyInst(_inst,_other,100538).y=84;yyInst(_inst,_other,100534).y=84;yyInst(_inst,_other,100545).y=84;yyInst(_inst,_other,100540).y=120;yyInst(_inst,_other,100536).y=120;yyInst(_inst,_other,100546).y=120;yyInst(_inst,_other,100541).y=156;yyInst(_inst,_other,100537).y=156;yyInst(_inst,_other,100547).y=156;yyInst(_inst,_other,199991).gmltitle="Injured";yyInst(_inst,_other,199991).gmltext=(gmlinj==1)?"1 week":(gmlinj+" weeks");yyInst(_inst,_other,199991).gmltext_col=255;yyInst(_inst,_other,199992).gmltext="Move to IR";yyInst(_inst,_other,199993).gmltext="Move";yyInst(_inst,_other,199993).gmlonClickAction=function(_i,_o){var gmlpm=yyInst(_i,_o,97).gmlplayer_profile;var gmlnm=ds_map_find_value(gmlpm,"fname")+" "+ds_map_find_value(gmlpm,"lname");gml_Script_s_create_message(_i,_o,gml_Script_s_str(_i,_o,"ui_Meeting"),"Are you sure you want to place "+gmlnm+" on Injured Reserve?",gml_Script_s_str(_i,_o,"ui_No"),gml_Script_s_str(_i,_o,"ui_Yes"),kgml_Script_s_msg_clear,function(_i2,_o2){var gmlm=yyInst(_i2,_o2,97);var gmlp=gmlm.gmlplayer_profile;var gmlx=ds_list_find_index(gmlm.gmlroster,gmlp);if(gmlx>=0){ds_list_delete(gmlm.gmlroster,gmlx);if(gmlm.gmlir_list===undefined){gmlm.gmlir_list=ds_list_create();};ds_list_add(gmlm.gmlir_list,gmlp);};gml_Script_s_msg_clear(_i2,_o2);if(instance_exists(199993)){yyInst(_i2,_o2,199993).gmltext="Moved";yyInst(_i2,_o2,199993).gmlactive=false;};},global.gmlc_background,1);};if(gmlisir){yyInst(_inst,_other,199993).gmltext="Moved";yyInst(_inst,_other,199993).gmlactive=false;}else if(gmlinj<4){yyInst(_inst,_other,199993).gmlactive=false;};}else{yyInst(_inst,_other,199991).visible=false;yyInst(_inst,_other,199992).visible=false;yyInst(_inst,_other,199993).visible=false;yyInst(_inst,_other,199993).gmlactive=false;};rbMeetCutRow(_inst,_other,(gmlinj>0||gmlisir));yyInst(_inst,_other,100549).visible=false;
+if((yyGetBool(ds_map_exists(_inst.gmlpmap,"meetingdone")))&&(yyGetBool(yyfgreater(ds_map_find_value(_inst.gmlpmap,"meetingdone"),0)))){{yyInst(_inst,_other,100549).gmltext=string_replace(gml_Script_s_str(_inst,_other,"msg_MeetingDone"),"$playername",gmlname);yyInst(_inst,_other,100549).visible=true;yyInst(_inst,_other,100543).gmlactive=false;yyInst(_inst,_other,100545).gmlactive=false;yyInst(_inst,_other,100546).gmlactive=false;yyInst(_inst,_other,100547).gmlactive=false;};};}// "Cut Player" row on the meeting screen (under the other options); uses the game's own cut flow: confirm popup, then the real cut
+function rbMeetDepth(_inst, _other, pm) {
+    // place in my depth chart: asks the game's own depth-chart lookup (same sort, same "n-th at this position" call the depth chart screen makes)
+    try {
+        var M = yyInst(_inst, _other, 97), code = Number(ds_map_find_value(pm, "position"));
+        if (ds_map_exists(pm, "slot") && ds_map_find_value(pm, "slot")) { return "SLOT"; }
+        var tmp = ds_list_create();
+        for (var i = 0; i < ds_list_size(M.gmlroster); i++) { ds_list_add(tmp, ds_list_find_value(M.gmlroster, i)); }
+        var ro = gml_Script_s_sort_players(_inst, _other, tmp, 3), place = 0, n = 0;
+        for (var k = 1; k <= 40; k++) {
+            var p = gml_Script_s_get_player_by_position_from_roster_slotaware(_inst, _other, code, k, ro);
+            if (!(Number(p) >= 0)) { break; }
+            n = k;
+            if (Number(p) === Number(pm)) { place = k; break; }
+        }
+        if (place === 0) {   // not a starter in the chart (hurt / bench): he comes after the healthy ones
+            var after = 0;
+            for (var m = 0; m < ds_list_size(ro); m++) {
+                var q = ds_list_find_value(ro, m);
+                if (Number(ds_map_find_value(q, "position")) !== code) { continue; }
+                after++;
+                if (Number(q) === Number(pm)) { break; }
+            }
+            place = Math.max(n + 1, after);
+        }
+        ds_list_destroy(ro);
+        return String(gml_Script_s_get_string_position(_inst, _other, code)) + " #" + place;
+    } catch (_e) { return "-"; }
+}
+// "Cut Player" row on the meeting screen (under the other options); uses the game's own cut flow: confirm popup, then the real cut
+function rbMeetCutRow(_inst, _other, inj) {
+    try {
+        var L = yyInst(_inst, _other, 100534).layer, y = inj ? 228 : 216;   // below the last row (the injury row shifts everything up)
+        var bx = instance_create_layer(160, y, L, 66);
+        yyInst(_inst, _other, bx).image_xscale = 1.1; yyInst(_inst, _other, bx).image_yscale = 0.25; yyInst(_inst, _other, bx).gmltext = "Cut Player";
+        var lb = instance_create_layer(56, y, L, 66);   // far-left box: place in the depth chart
+        yyInst(_inst, _other, lb).image_xscale = 0.55; yyInst(_inst, _other, lb).image_yscale = 0.25;
+        yyInst(_inst, _other, lb).gmltitle = "Depth"; yyInst(_inst, _other, lb).gmltext = rbMeetDepth(_inst, _other, _inst.gmlpmap);
+        var bt = instance_create_layer(352, y, L, 39);
+        yyInst(_inst, _other, bt).gmltext = "Cut";
+        yyInst(_inst, _other, bt).gmlonClickAction = function (_i, _o) { gml_Script_btn_click_Profile_Cut(_i, _o); };
+        // stretch the big backing box so it also contains the cut row
+        var bb = yyInst(_inst, _other, 100532), baseH = sprite_get_height(bb.sprite_index);
+        var rowH = sprite_get_height(yyInst(_inst, _other, bx).sprite_index) * 0.25;
+        if (baseH > 0) { bb.image_yscale = Math.max(bb.image_yscale, (y + Math.max(rowH, 24) + 12 - bb.y) / baseH); }
+    } catch (_e) { try { console.error("meeting cut row error", _e); } catch (_x) {} }
+}
+function gml_Object_obj_meeting_player_PreCreate_0(_inst,
 _other){event_inherited(_inst,_other);_inst.gmlstat_type=0;}function gml_Object_obj_staffprofile_Create_0(_inst,_other){_inst.gmlpmap=yyInst(_inst,_other,97).gmlplayer_profile;if(yyfequal(_inst.gmlpmap,(-4))){return;};if(yyfequal(ds_map_find_value(_inst.gmlpmap,"position"),100)){{room_goto(46);return;};};draw_set_font(global.gmlfnt_small_flex);draw_set_halign(0);draw_set_valign(1);yyInst(_inst,_other,100471).gmlpmap=yyInst(_inst,_other,97).gmlplayer_profile;yyInst(_inst,_other,100471).gmlactive=false;
 yyInst(_inst,_other,100467).gmltitle=gml_Script_s_get_string_position_full(_inst,_other,ds_map_find_value(_inst.gmlpmap,"position"));yyInst(_inst,_other,100468).gmltext=yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Name")),": "),__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"fname")))," "),__yy_gml_errCheck(ds_map_find_value(_inst.gmlpmap,"lname")));yyInst(_inst,_other,100469).gmltext=yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Age")),
 ": "),__yy_gml_errCheck(string(ds_map_find_value(_inst.gmlpmap,"age"))));if((yyGetBool(yyfequal(!yyGetBool(ds_map_find_value(_inst.gmlpmap,"position")),100)))&&(yyGetBool(yyfgreaterequal(ds_map_find_value(_inst.gmlpmap,"age"),gml_Script_s_get_max_age(_inst,_other,_inst.gmlpmap))))){yyInst(_inst,_other,100469).gmltext=yyfplus(yyInst(_inst,_other,100469).gmltext,yyfplus(yyfplus(" (",__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Retiring"))),")"));};yyInst(_inst,_other,100470).gmltext=yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,
@@ -9585,7 +9644,7 @@ _inst.gmlroster_profile)]).gmlonHoldAction=(gmlir?kgml_Script_s_clear_last_selec
 __yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw),0.5)));yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlr,_inst.gmlroster_profile)]).y=yyfminus(__yy_gml_errCheck(gmlpy),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(0,_inst.gmlroster_profile)]).sprite_height),0.5)));gmlpx=yyfplus(gmlpx,gmlpw);if(yyfequal(gmlr,yyfminus(__yy_gml_errCheck(gmlcards_per_row),1))){{var gmlsz=yyfminus(__yy_gml_errCheck(gmlsize),
 __yy_gml_errCheck(gmlcards_per_row));gmlpx=yyftime(__yy_gml_errCheck(g_pBuiltIn.room_width),0.5);gmlpx=yyfminus(gmlpx,yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlsz),1)),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw),0.5))));gmlpx=yyfplus(gmlpx,gmlbuf);gmlpy=yyfplus(gmlpy,88);};};}};if(yyfgreater(gmlsize,12)){var gmlrows=(gmlsize>=15)?3:2;var gmlcpr=Math.ceil(gmlsize/gmlrows);var gmlgy=(gmlrows==3)?3:4;var gmlsc=6/gmlcpr;if(gmlrows==3){gmlsc=Math.min(0.7,(390-((gmlcpr-1)*3))/(gmlcpr*sprite_get_width(172)),(168-((gmlrows-1)*gmlgy))/(gmlrows*sprite_get_height(172)));}var gmlcw=sprite_get_width(172)*gmlsc;var gmlch=sprite_get_height(172)*gmlsc;var gmltop=((gmlrows==3)?134:120)-((gmlch*gmlrows)+((gmlrows-1)*gmlgy))/2;for(var gmlk=0;gmlk<gmlsize;gmlk++){var gmlcard=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlk,_inst.gmlroster_profile)]);var gmlrow=Math.min(gmlrows-1,Math.floor(gmlk/gmlcpr));var gmlcount=(gmlrow<gmlrows-1)?gmlcpr:(gmlsize-(gmlcpr*(gmlrows-1)));var gmlidx=gmlk-(gmlrow*gmlcpr);gmlcard.image_xscale=gmlsc;gmlcard.image_yscale=gmlsc;gmlcard.x=round((g_pBuiltIn.room_width*0.5)-(((gmlcount*gmlcw)+((gmlcount-1)*3))/2)+(gmlidx*(gmlcw+3)));gmlcard.y=round(gmltop+(gmlrow*(gmlch+gmlgy)));}}global.gmlph_list=[];global.gmlph_owner=-1;if(global.gmldd_view===true){for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlhc=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlhk,_inst.gmlroster_profile)]);gmlhc.visible=false;gmlhc.gmlactive=false;}var gmlddt=ds_list_create();for(var gmlq1=0;gmlq1<ds_list_size(yyInst(_inst,_other,97).gmlroster);gmlq1++){ds_list_add(gmlddt,ds_list_find_value(yyInst(_inst,_other,97).gmlroster,gmlq1));}var gmlddr=gml_Script_s_sort_players(_inst,_other,gmlddt,3);var gmldds=[[9,1,80,30],[7,1,155,38],[7,2,210,38],[7,3,265,38],[9,2,340,30],[8,1,45,125],[8,3,100,125],[15,1,155,145],[6,1,210,145],[6,2,265,145],[15,2,320,145],[8,2,375,125]];for(var gmlsi=0;gmlsi<gmldds.length;gmlsi++){var gmlsp=gml_Script_s_get_player_by_position_from_roster_slotaware(_inst,_other,gmldds[gmlsi][0],gmldds[gmlsi][1],gmlddr);if(!(gmlsp>=0)){global.gmlph_list.push([gmldds[gmlsi][0],gmldds[gmlsi][2],gmldds[gmlsi][3]]);continue;}for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlhc=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlhk,_inst.gmlroster_profile)]);if(Number(gmlhc.gmlpmap)===Number(gmlsp)){gmlhc.visible=true;gmlhc.gmlactive=true;gmlhc.image_xscale=0.8;gmlhc.image_yscale=0.8;global.gmlph_owner=gmlhc.id;gmlhc.x=gmldds[gmlsi][2];gmlhc.y=gmldds[gmlsi][3];break;}}}}if(global.gmldc_view===true&&global.gmldd_view!==true){var gmlro_tmp=ds_list_create();for(var gmlq0=0;gmlq0<ds_list_size(yyInst(_inst,_other,97).gmlroster);gmlq0++){ds_list_add(gmlro_tmp,ds_list_find_value(yyInst(_inst,_other,97).gmlroster,gmlq0));}var gmlro=gml_Script_s_sort_players(_inst,_other,gmlro_tmp,3);var gmldcs=[[16,1,100,40],[5,1,157,40],[5,2,214,40],[5,3,272,40],[16,2,329,40],[3,1,385,56],[4,1,14,120],[0,0,78,124],[2,1,148,150],[1,1,214,130],[4,2,340,124]];if(rbGetForm()==="DUAL TE"){gmldcs=[[16,1,100,40],[5,1,157,40],[5,2,214,40],[5,3,272,40],[16,2,329,40],[3,1,385,56],[4,1,58,131],[2,1,148,150],[1,1,214,130],[4,2,340,131],[3,2,44,56]];}else if(rbGetForm()==="DUAL HB"){gmldcs=[[16,1,100,40],[5,1,157,40],[5,2,214,40],[5,3,272,40],[16,2,329,40],[4,1,14,120],[0,0,88,124],[2,1,148,150],[1,1,214,130],[2,2,280,150],[4,2,375,120]];}for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlhc=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlhk,_inst.gmlroster_profile)]);gmlhc.visible=false;gmlhc.gmlactive=false;}for(var gmlsi=0;gmlsi<gmldcs.length;gmlsi++){var gmlsp=(gmldcs[gmlsi][0]==0)?gml_Script_s_get_player_wr_slot(_inst,_other,gmlro):gml_Script_s_get_player_by_position_from_roster_slotaware(_inst,_other,gmldcs[gmlsi][0],gmldcs[gmlsi][1],gmlro);if(gmldcs[gmlsi][0]==0&&!(gmlsp>=0)){gmlsp=gml_Script_s_get_player_by_position_from_roster_slotaware(_inst,_other,4,3,gmlro);}if(!(gmlsp>=0)){global.gmlph_list.push([gmldcs[gmlsi][0],gmldcs[gmlsi][2],gmldcs[gmlsi][3]]);continue;}for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlhc=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlhk,_inst.gmlroster_profile)]);if(Number(gmlhc.gmlpmap)===Number(gmlsp)){gmlhc.visible=true;gmlhc.gmlactive=true;gmlhc.image_xscale=0.8;gmlhc.image_yscale=0.8;global.gmlph_owner=gmlhc.id;gmlhc.x=gmldcs[gmlsi][2];gmlhc.y=gmldcs[gmlsi][3];break;}}}ds_list_destroy(gmlro);}yyInst(_inst,_other,100491).gmlimage=159;{var __yy__v2257=GetWithArray(97);for(var __yy__v2258 in __yy__v2257){if(!__yy__v2257.hasOwnProperty(__yy__v2258))continue;var __yy__v2259=__yy__v2257[__yy__v2258];
 {var gmllimit=10;if(yyfgreaterequal(__yy__v2259.gmlsalary_cap,200)){{gmllimit=12;yyInst(_inst,_other,100496).gmlinfo_msg="info_StarPlayers12";};};if(yyfgreaterequal(__yy__v2259.gmlsalary_cap,275)){gmllimit=16;};if(yyfgreaterequal(__yy__v2259.gmlsalary_cap,350)){gmllimit=20;};if(yyfgreaterequal(__yy__v2259.gmlsalary_cap,450)){gmllimit=30;};yyInst(_inst,_other,100501).gmltext=yyfplus(yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(__yy__v2259,_inst,"ui_Players"))," "),__yy_gml_errCheck(string(gmlsize)))," / "),__yy_gml_errCheck(string(gmllimit)));if(yyGetBool(__yy__v2259.gmlroster_from_store)){yyInst(_inst,_other,100491).gmlimage=142;}else {if(yyfgreater(ds_list_size(__yy__v2259.gmldraftlist),
-0)){yyInst(_inst,_other,100491).gmlimage=142;}else {if(yyfgreater(ds_list_size(__yy__v2259.gmlfreeagentlist),0)){yyInst(_inst,_other,100491).gmlimage=142;}else {if(yyfgreater(ds_list_size(__yy__v2259.gmltradelist),0)){yyInst(_inst,_other,100491).gmlimage=142;};};};};}}};if(global.gmlsub_view===true&&global.gmldc_view===true){var gmlst=global.gmlsub_pmap;for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlhc=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlhk,_inst.gmlroster_profile)]);gmlhc.visible=false;gmlhc.gmlactive=false;gmlhc.gmlonHoldAction=(-1);}var gmlel=[];var gmlstok=(gmlst!==undefined&&gmlst!==null&&Number(gmlst)>=0);if(gmlstok){for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlpm=ds_list_find_value(gmlsrc,gmlhk);if(Number(gmlpm)===Number(gmlst)){continue;}if(Number(ds_map_find_value(gmlpm,"position"))!==Number(ds_map_find_value(gmlst,"position"))){continue;}if(ds_map_find_value(gmlpm,"condition")<0){continue;}if(gml_Script_s_player_benched(_inst,_other,gmlpm)){continue;}gmlel.push(gmlhk);}}var gmlsn=gmlel.length;var gmlsc2=(gmlsn<=6)?1:((gmlsn<=12)?0.8:0.6);var gmlcw2=sprite_get_width(172)*gmlsc2;var gmlch2=sprite_get_height(172)*gmlsc2;var gmlper=Math.max(1,Math.floor(440/(gmlcw2+4)));var gmlrows2=Math.max(1,Math.ceil(gmlsn/gmlper));var gmltop2=Math.max(60,130-((gmlch2*gmlrows2)+((gmlrows2-1)*4))/2);for(var gmlq=0;gmlq<gmlsn;gmlq++){var gmlrw=Math.floor(gmlq/gmlper);var gmlcnt=(gmlrw<gmlrows2-1)?gmlper:(gmlsn-(gmlper*(gmlrows2-1)));var gmlix=gmlq-(gmlrw*gmlper);var gmlc2=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlel[gmlq],_inst.gmlroster_profile)]);gmlc2.visible=true;gmlc2.gmlactive=true;gmlc2.image_xscale=gmlsc2;gmlc2.image_yscale=gmlsc2;gmlc2.x=round((g_pBuiltIn.room_width*0.5)-(((gmlcnt*gmlcw2)+((gmlcnt-1)*4))/2)+(gmlix*(gmlcw2+4)));gmlc2.y=round(gmltop2+(gmlrw*(gmlch2+4)));}var gmltx=yyInst(_inst,_other,100501);gmltx.visible=true;if(gmlsn>0&&gmlstok){gmltx.gmltext="Select a replacement for "+ds_map_find_value(gmlst,"fname")+" "+ds_map_find_value(gmlst,"lname");}else{gmltx.gmltext="There are no eligible players available";gmltx.y=130;}}if(yyGetBool(global.gmlexhibition)){{gml_Script_rm_roster_exhibition_create(_inst,_other);};};var ___sw2030___=(gmlir?0:yyInst(_inst,_other,97).gmlintro);var ___swc2031___=-1;if(yyCompareVal(___sw2030___,1,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw2030___,
+0)){yyInst(_inst,_other,100491).gmlimage=142;}else {if(yyfgreater(ds_list_size(__yy__v2259.gmlfreeagentlist),0)){yyInst(_inst,_other,100491).gmlimage=142;}else {if(yyfgreater(ds_list_size(__yy__v2259.gmltradelist),0)){yyInst(_inst,_other,100491).gmlimage=142;};};};};}}};if(global.gmlsub_view===true&&global.gmldc_view===true){var gmlst=global.gmlsub_pmap;for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlhc=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlhk,_inst.gmlroster_profile)]);gmlhc.visible=false;gmlhc.gmlactive=false;gmlhc.gmlonHoldAction=(-1);}var gmlel=[];var gmlstok=(gmlst!==undefined&&gmlst!==null&&Number(gmlst)>=0);if(gmlstok){for(var gmlhk=0;gmlhk<gmlsize;gmlhk++){var gmlpm=ds_list_find_value(gmlsrc,gmlhk);if(Number(gmlpm)===Number(gmlst)){continue;}{var gmlpp=Number(ds_map_find_value(gmlpm,"position")),gmltp=Number(ds_map_find_value(gmlst,"position")),gmlts=ds_map_exists(gmlst,"slot")&&ds_map_find_value(gmlst,"slot");if(gmlpp!==gmltp&&!(gmlts&&(gmlpp===3||gmlpp===4)&&(gmltp===3||gmltp===4))){continue;}}if(ds_map_find_value(gmlpm,"condition")<0){continue;}if(gml_Script_s_player_benched(_inst,_other,gmlpm)){continue;}gmlel.push(gmlhk);}}var gmlsn=gmlel.length;var gmlsc2=(gmlsn<=6)?1:((gmlsn<=12)?0.8:0.6);var gmlcw2=sprite_get_width(172)*gmlsc2;var gmlch2=sprite_get_height(172)*gmlsc2;var gmlper=Math.max(1,Math.floor(440/(gmlcw2+4)));var gmlrows2=Math.max(1,Math.ceil(gmlsn/gmlper));var gmltop2=Math.max(60,130-((gmlch2*gmlrows2)+((gmlrows2-1)*4))/2);for(var gmlq=0;gmlq<gmlsn;gmlq++){var gmlrw=Math.floor(gmlq/gmlper);var gmlcnt=(gmlrw<gmlrows2-1)?gmlper:(gmlsn-(gmlper*(gmlrows2-1)));var gmlix=gmlq-(gmlrw*gmlper);var gmlc2=yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlel[gmlq],_inst.gmlroster_profile)]);gmlc2.visible=true;gmlc2.gmlactive=true;gmlc2.image_xscale=gmlsc2;gmlc2.image_yscale=gmlsc2;gmlc2.x=round((g_pBuiltIn.room_width*0.5)-(((gmlcnt*gmlcw2)+((gmlcnt-1)*4))/2)+(gmlix*(gmlcw2+4)));gmlc2.y=round(gmltop2+(gmlrw*(gmlch2+4)));}var gmltx=yyInst(_inst,_other,100501);gmltx.visible=true;if(gmlsn>0&&gmlstok){gmltx.gmltext="Select a replacement for "+ds_map_find_value(gmlst,"fname")+" "+ds_map_find_value(gmlst,"lname");}else{gmltx.gmltext="There are no eligible players available";gmltx.y=130;}}if(yyGetBool(global.gmlexhibition)){{gml_Script_rm_roster_exhibition_create(_inst,_other);};};var ___sw2030___=(gmlir?0:yyInst(_inst,_other,97).gmlintro);var ___swc2031___=-1;if(yyCompareVal(___sw2030___,1,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw2030___,
 2,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw2030___,3,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw2030___,4,g_GMLMathEpsilon,false)==0||yyCompareVal(___sw2030___,5,g_GMLMathEpsilon,false)==0){___swc2031___=0;}else if(yyCompareVal(___sw2030___,6,g_GMLMathEpsilon,false)==0){___swc2031___=1;}else if(yyCompareVal(___sw2030___,7,g_GMLMathEpsilon,false)==0){___swc2031___=2;}switch(___swc2031___){case 0:{yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(0,_inst.gmlroster_profile)]).gmlflash=true;
 yyInst(_inst,_other,100499).gmlactive=false;yyInst(_inst,_other,100491).gmlactive=false;break;}case 1:{yyInst(_inst,_other,100499).gmlactive=false;yyInst(_inst,_other,100491).gmlflash=true;}case 2:{break;}default :{return;break;}};gml_Script_s_check_intro(_inst,_other);}function gml_Object_obj_roster_PreCreate_0(_inst,_other){event_inherited(_inst,_other);_inst.gmlprofile=__yy_gml_array_check(_inst.gmlprofile,4083195518);_inst.gmlprofile[__yy_gml_array_check_index_set(5)]=49;_inst.gmlsortby=2;}function gml_Object_obj_winners_Create_0(_inst, _other){gml_Script_s_do_player_awards(_inst,_other);_inst.alarm=__yy_gml_array_check(_inst.alarm,1584050178);_inst.alarm[__yy_gml_array_check_index_set(0)]=1;_inst.gmlc_sky=make_color_rgb(0,40,180);var gmlbowlnum=yyfminus(yyfplus(__yy_gml_errCheck(yyInst(_inst,_other,97).gmlstart_year),__yy_gml_errCheck(yyInst(_inst,_other,97).gmlyear)),1966);yyInst(_inst,_other,100607).gmltext=yyfplus(yyfplus(__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_SuperBowl"))," "),__yy_gml_errCheck(gml_Script_s_roman_numerals(_inst, _other,gmlbowlnum)));yyInst(_inst,_other,100609).gmltext=yyfplus(yyfplus(yyfplus(__yy_gml_errCheck(ds_map_find_value(yyInst(_inst,_other,97).gmlmyteam,"name"))," are "),__yy_gml_errCheck(gml_Script_s_str(_inst,_other,"ui_Champions"))),"!");yyInst(_inst,_other,100612).gmltext=ds_map_find_value(yyInst(_inst,_other,97).gmlmyteam,"name");yyInst(_inst,_other,100612).visible=false;yyInst(_inst,_other,100610).gmltext=gml_Script_s_str(_inst,_other,"ui_HeadCoach");yyInst(_inst,_other,100613).gmltext=gml_Script_s_str(_inst, _other,"short_STAFF_DF");yyInst(_inst,_other,100614).gmltext=gml_Script_s_str(_inst,_other,"short_STAFF_OF");yyInst(_inst,_other,97).gmlroster=gml_Script_s_sort_players(_inst,_other,yyInst(_inst,_other,97).gmlroster,4);var gmlsize=ds_list_size(yyInst(_inst,_other,97).gmlroster);var gmlpx=round(yyftime(__yy_gml_errCheck(g_pBuiltIn.room_width),0.5));var gmlpy=138;var gmlpw=sprite_get_width(198);if(yyfgreater(gmlsize,5)){{gmlpy=yyfminus(gmlpy,44);gmlpx=yyfminus(gmlpx,yyftime(4,__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw), 1))));};}else {{gmlpx=yyfminus(gmlpx,yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlsize),1)),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw),1))));};};var gmluniform=instance_create_layer(0,0,"Instances",132);yyInst(_inst,_other,gmluniform).visible=false;gml_Script_s_load_uniform_file2(_inst,_other,yyInst(_inst,_other,97).gmlmyteam_id,gmluniform,0,"");var gmldpth=10;var gmlr=0;for(;yyfless(gmlr,gmlsize);(g_yyPrePostObject__=gmlr,gmlr=(g_yyPrePostObject__ instanceof Long?gmlr.add(1):++gmlr), g_yyPrePostObject__)){{_inst.gmlroster_profile=__yy_gml_array_check(_inst.gmlroster_profile,917944806);_inst.gmlroster_profile[__yy_gml_array_check_index_set(gmlr)]=instance_create_layer(0,0,"Instances",50);yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlr,_inst.gmlroster_profile)]).gmlpmap=ds_list_find_value(yyInst(_inst,_other,97).gmlroster,gmlr);{var __yy__v2260=GetWithArray(_inst.gmlroster_profile[__yy_gml_array_check_index(gmlr,_inst.gmlroster_profile)]);for(var __yy__v2261 in __yy__v2260){ if(!__yy__v2260.hasOwnProperty(__yy__v2261))continue;var __yy__v2262=__yy__v2260[__yy__v2261];gml_Script_s_set_up_uniform_profile(__yy__v2262,_inst,gmluniform);}};yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlr,_inst.gmlroster_profile)]).x=gmlpx;yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlr,_inst.gmlroster_profile)]).y=yyfminus(__yy_gml_errCheck(gmlpy),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(0, _inst.gmlroster_profile)]).sprite_height),0.5)));yyInst(_inst,_other,_inst.gmlroster_profile[__yy_gml_array_check_index(gmlr,_inst.gmlroster_profile)]).depth=gmldpth;gmlpx=yyfplus(gmlpx,yyftime(__yy_gml_errCheck(gmlpw),2));if(yyfequal(gmlr,4)){{var gmlsz=yyfminus(__yy_gml_errCheck(gmlsize),5);gmlpx=yyftime(__yy_gml_errCheck(g_pBuiltIn.room_width),0.5);gmlpx=yyfminus(gmlpx,yyftime(__yy_gml_errCheck(yyfminus(__yy_gml_errCheck(gmlsz),1)),__yy_gml_errCheck(yyftime(__yy_gml_errCheck(gmlpw),1))));gmlpy=yyfplus(gmlpy, 64);gmldpth=yyfminus(gmldpth,1);};};}};rbWinnersLayout(_inst,_other,gmlsize);_inst.gmlboss=instance_create_layer(0,0,"Instances",50);yyInst(_inst,_other,_inst.gmlboss).gmlpmap=gml_Script_s_get_staff(_inst,_other,100);{var __yy__v2263=GetWithArray(_inst.gmlboss);for(var __yy__v2264 in __yy__v2263){if(!__yy__v2263.hasOwnProperty(__yy__v2264))continue;var __yy__v2265=__yy__v2263[__yy__v2264];gml_Script_s_set_up_uniform_profile(__yy__v2265,_inst,gmluniform);}};_inst.gmlof=instance_create_layer(0,0,"Instances",50);yyInst(_inst,_other,_inst.gmlof).gmlpmap=gml_Script_s_get_staff(_inst, _other,102);{var __yy__v2266=GetWithArray(_inst.gmlof);for(var __yy__v2267 in __yy__v2266){if(!__yy__v2266.hasOwnProperty(__yy__v2267))continue;var __yy__v2268=__yy__v2266[__yy__v2267];gml_Script_s_set_up_uniform_profile(__yy__v2268,_inst,gmluniform);}};_inst.gmldf=instance_create_layer(0,0,"Instances",50);yyInst(_inst,_other,_inst.gmldf).gmlpmap=gml_Script_s_get_staff(_inst,_other,101);{var __yy__v2269=GetWithArray(_inst.gmldf);for(var __yy__v2270 in __yy__v2269){if(!__yy__v2269.hasOwnProperty(__yy__v2270))continue; var __yy__v2271=__yy__v2269[__yy__v2270];gml_Script_s_set_up_uniform_profile(__yy__v2271,_inst,gmluniform);}};yyInst(_inst,_other,_inst.gmlboss).x=yyInst(_inst,_other,100610).x;yyInst(_inst,_other,_inst.gmlboss).y=202;yyInst(_inst,_other,_inst.gmlboss).depth=gmldpth;yyInst(_inst,_other,_inst.gmlof).x=yyInst(_inst,_other,100614).x;yyInst(_inst,_other,_inst.gmlof).y=202;yyInst(_inst,_other,_inst.gmlof).depth=gmldpth;yyInst(_inst,_other,_inst.gmldf).x=yyInst(_inst,_other,100613).x;yyInst(_inst,_other, _inst.gmldf).y=202;yyInst(_inst,_other,_inst.gmldf).depth=gmldpth;}function gml_Object_obj_winners_Alarm_0(_inst,_other){effect_create_above(3,random(g_pBuiltIn.room_width),yyfminus(__yy_gml_errCheck(random(g_pBuiltIn.room_height)),100),choose(0,1,2),make_colour_hsv(random(255),255,255));_inst.alarm=__yy_gml_array_check(_inst.alarm,1584050178);_inst.alarm[__yy_gml_array_check_index_set(0)]=yyfplus(__yy_gml_errCheck(random(30)),1);}function gml_Object_obj_winners_Draw_0(_inst,_other){draw_set_color(_inst.gmlc_sky);
 draw_rectangle((-1),(-1),yyfplus(__yy_gml_errCheck(g_pBuiltIn.room_width),1),yyfplus(__yy_gml_errCheck(g_pBuiltIn.room_height),1),0);draw_set_color(16777215);gpu_set_blendmode(1);draw_ellipse_colour((-400),0,yyfplus(__yy_gml_errCheck(g_pBuiltIn.room_width),400),yyfplus(__yy_gml_errCheck(g_pBuiltIn.room_height),450),global.gmlc_background,0,0);gpu_set_blendmode(0);}function gml_Object_obj_winners_PreCreate_0(_inst,_other){event_inherited(_inst,_other);_inst.gmlprofile=__yy_gml_array_check(_inst.gmlprofile,
@@ -9640,18 +9699,18 @@ _inst.gmlgp_mapped_button=32771;_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_R
 }function gml_RoomCC_rm_frontoffice_9_PreCreate(_inst,_other){_inst.gmlinfo_msg="info_Facility_Training";_inst.gmlactive=false;}function gml_RoomCC_rm_frontoffice_10_PreCreate(_inst,_other){_inst.gmlinfo_msg="info_Facility_Rehab";_inst.gmlactive=false;}function gml_RoomCC_rm_frontoffice_11_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_StaffProfile;}function gml_RoomCC_rm_frontoffice_12_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_StaffProfile;}function gml_RoomCC_rm_frontoffice_15_PreCreate(_inst,
 _other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_Staff");}function gml_RoomCC_rm_frontoffice_17_PreCreate(_inst,_other){_inst.gmldraw_box=false;}function gml_RoomCC_rm_frontoffice_18_PreCreate(_inst,_other){_inst.gmlinfo_msg="info_DraftPicks";}function gml_RoomCC_rm_frontoffice_19_PreCreate(_inst,_other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_DraftPicks");}function gml_RoomCC_rm_frontoffice_20_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_get_credit(_inst,_inst);_inst.gmlicon=105;
 }function gml_RoomCC_rm_frontoffice_22_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_ViewHires;_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_StaffHires");}function gml_RoomCC_rm_frontoffice_23_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_FreeAgents2;_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_FreeAgents");}function gml_RoomCC_rm_frontoffice_26_Create(_inst,_other){event_inherited(_inst,_inst);}function gml_RoomCC_rm_frontoffice_26_PreCreate(_inst,
-_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_BoostSalaryCap");_inst.gmlonClickAction=kgml_Script_btn_click_Boost_Salary_Cap;_inst.gmlgp_mapped_button=32771;}function gml_RoomCC_rm_frontoffice_27_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_StaffProfile;}function gml_Room_rm_halloffame_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);}function gml_RoomCC_rm_halloffame_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
+_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_BoostSalaryCap");_inst.gmlonClickAction=kgml_Script_btn_click_Boost_Salary_Cap;_inst.gmlgp_mapped_button=32771;}function gml_RoomCC_rm_frontoffice_27_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_StaffProfile;}function gml_Room_rm_halloffame_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);rbSlBtn(_inst,_other);}function gml_RoomCC_rm_halloffame_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
 _inst,"ui_HallOfFame");}function gml_RoomCC_rm_halloffame_1_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_Home;_inst.gmlimage=159;_inst.gmlgp_mapped_hidden=global.gmlgp_back;}function gml_RoomCC_rm_halloffame_2_PreCreate(_inst,_other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_Achievements");_inst.gmlactive=false;}function gml_RoomCC_rm_halloffame_3_Create(_inst,_other){if(yyGetBool(gml_Script_s_is_co_mode(_inst,_inst))){{_inst.gmlcontinue_icon=21;};};}function gml_RoomCC_rm_halloffame_3_PreCreate(_inst,
 _other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_PlayerHallOfFame");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_players;_inst.gmlcontinue_icon=217;}function gml_RoomCC_rm_halloffame_4_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_RetroBowls");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_Coach;_inst.gmlcontinue_icon=160;}function gml_RoomCC_rm_halloffame_5_PreCreate(_inst,_other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_YourRecord");}function gml_RoomCC_rm_halloffame_6_PreCreate(_inst,
 _other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_YourHistory");}function gml_RoomCC_rm_halloffame_7_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_PlayerRecords");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_player_records;}function gml_RoomCC_rm_halloffame_8_Create(_inst,_other){_inst.gmlcolour=global.gmlc_primary;}function gml_RoomCC_rm_halloffame_8_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_Achievements");_inst.gmlonClickAction=kgml_Script_btn_click_HallOfFame;
-}function gml_Room_rm_halloffame_retrobowls_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);}function gml_RoomCC_rm_halloffame_retrobowls_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_HallOfFame");}function gml_RoomCC_rm_halloffame_retrobowls_1_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_Home;_inst.gmlimage=159;_inst.gmlgp_mapped_hidden=global.gmlgp_back;}function gml_RoomCC_rm_halloffame_retrobowls_2_PreCreate(_inst,
+}function gml_Room_rm_halloffame_retrobowls_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);rbSlBtn(_inst,_other);}function gml_RoomCC_rm_halloffame_retrobowls_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_HallOfFame");}function gml_RoomCC_rm_halloffame_retrobowls_1_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_Home;_inst.gmlimage=159;_inst.gmlgp_mapped_hidden=global.gmlgp_back;}function gml_RoomCC_rm_halloffame_retrobowls_2_PreCreate(_inst,
 _other){_inst.gmltitle=gml_Script_s_str(_inst,_inst,"ui_CoachRecord");}function gml_RoomCC_rm_halloffame_retrobowls_4_Create(_inst,_other){if(yyGetBool(gml_Script_s_is_co_mode(_inst,_inst))){{_inst.gmlcontinue_icon=21;};};}function gml_RoomCC_rm_halloffame_retrobowls_4_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_PlayerHallOfFame");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_players;_inst.gmlcontinue_icon=217;}function gml_RoomCC_rm_halloffame_retrobowls_5_Create(_inst,
 _other){_inst.gmlcolour=global.gmlc_primary;}function gml_RoomCC_rm_halloffame_retrobowls_5_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_RetroBowls");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_Coach;_inst.gmlcontinue_icon=160;}function gml_RoomCC_rm_halloffame_retrobowls_6_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_PlayerRecords");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_player_records;}function gml_RoomCC_rm_halloffame_retrobowls_7_PreCreate(_inst,
-_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_Achievements");_inst.gmlonClickAction=kgml_Script_btn_click_HallOfFame;}function gml_Room_rm_halloffame_players_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);}function gml_RoomCC_rm_halloffame_players_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_PlayerHallOfFame");}function gml_RoomCC_rm_halloffame_players_1_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
+_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_Achievements");_inst.gmlonClickAction=kgml_Script_btn_click_HallOfFame;}function gml_Room_rm_halloffame_players_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);rbSlBtn(_inst,_other);}function gml_RoomCC_rm_halloffame_players_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_PlayerHallOfFame");}function gml_RoomCC_rm_halloffame_players_1_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
 _inst,"ui_PlayerHallOfFameEmpty");_inst.gmldraw_box=false;}function gml_RoomCC_rm_halloffame_players_2_PreCreate(_inst,_other){_inst.gmlimage=144;_inst.gmlonClickAction=kgml_Script_btn_click_HofPrev;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32773;}function gml_RoomCC_rm_halloffame_players_3_PreCreate(_inst,_other){_inst.gmlimage=146;_inst.gmlonClickAction=kgml_Script_btn_click_HofNext;_inst.gmlimage_only=true;_inst.gmlgp_mapped_button=32774;}function gml_RoomCC_rm_halloffame_players_4_PreCreate(_inst,
 _other){_inst.gmltext="";_inst.gmldraw_box=false;}function gml_RoomCC_rm_halloffame_players_6_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_Home;_inst.gmlgp_mapped_hidden=global.gmlgp_back;_inst.gmlimage=159;}function gml_RoomCC_rm_halloffame_players_7_Create(_inst,_other){_inst.gmlcolour=global.gmlc_primary;if(yyGetBool(gml_Script_s_is_co_mode(_inst,_inst))){{_inst.gmlcontinue_icon=21;};};}function gml_RoomCC_rm_halloffame_players_7_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
 _inst,"btn_PlayerHallOfFame");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_players;_inst.gmlcontinue_icon=217;}function gml_RoomCC_rm_halloffame_players_8_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_RetroBowls");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_Coach;_inst.gmlcontinue_icon=160;}function gml_RoomCC_rm_halloffame_players_9_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_PlayerRecords");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_player_records;
-}function gml_RoomCC_rm_halloffame_players_10_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_Achievements");_inst.gmlonClickAction=kgml_Script_btn_click_HallOfFame;}function gml_Room_rm_halloffame_player_records_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);}function gml_RoomCC_rm_halloffame_player_records_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_HallOfFame");}function gml_RoomCC_rm_halloffame_player_records_1_PreCreate(_inst,
+}function gml_RoomCC_rm_halloffame_players_10_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_Achievements");_inst.gmlonClickAction=kgml_Script_btn_click_HallOfFame;}function gml_Room_rm_halloffame_player_records_Create(_inst,_other){layer_background_blend(layer_background_get_id(layer_get_id("Background")),global.gmlc_background);rbSlBtn(_inst,_other);}function gml_RoomCC_rm_halloffame_player_records_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_HallOfFame");}function gml_RoomCC_rm_halloffame_player_records_1_PreCreate(_inst,
 _other){_inst.gmlonClickAction=kgml_Script_btn_click_Home;_inst.gmlgp_mapped_hidden=global.gmlgp_back;_inst.gmlimage=159;}function gml_RoomCC_rm_halloffame_player_records_2_PreCreate(_inst,_other){_inst.gmltitle="";}function gml_RoomCC_rm_halloffame_player_records_3_Create(_inst,_other){if(yyGetBool(gml_Script_s_is_co_mode(_inst,_inst))){{_inst.gmlcontinue_icon=21;};};}function gml_RoomCC_rm_halloffame_player_records_3_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_PlayerHallOfFame");
 _inst.gmlonClickAction=kgml_Script_btn_click_HOF_players;_inst.gmlcontinue_icon=217;}function gml_RoomCC_rm_halloffame_player_records_4_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_RetroBowls");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_Coach;_inst.gmlcontinue_icon=160;}function gml_RoomCC_rm_halloffame_player_records_5_Create(_inst,_other){_inst.gmlcolour=global.gmlc_primary;}function gml_RoomCC_rm_halloffame_player_records_5_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,
 _inst,"btn_PlayerRecords");_inst.gmlonClickAction=kgml_Script_btn_click_HOF_player_records;}function gml_RoomCC_rm_halloffame_player_records_6_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"btn_Achievements");_inst.gmlonClickAction=kgml_Script_btn_click_HallOfFame;}function gml_RoomCC_rm_halloffame_player_records_7_PreCreate(_inst,_other){_inst.gmlgp_mapped_button=32771;_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Reset");_inst.gmlonClickAction=kgml_Script_btn_click_Records_Reset;
@@ -9723,7 +9782,7 @@ function gml_RoomCC_rm_options_53_PreCreate(_inst,_other){
 function gml_RoomCC_rm_options_54_PreCreate(_inst,_other){_inst.gmltext="IMPORT DATA";_inst.gmldraw_box=false;_inst.gmlhalign=2;}
 function gml_RoomCC_rm_options_55_PreCreate(_inst,_other){
     _inst.gmltext="ENTER";
-    _inst.gmlonClickAction=function(_i,_o){rbConsole(_i,_o);};
+    _inst.gmlonClickAction=function(_i,_o){var _pw=window.prompt("Enter password:");if(_pw!==null&&_pw==="teeny weeny"){rbConsole(_i,_o);}else if(_pw!==null){window.alert("Wrong password");}};
 }
 function gml_RoomCC_rm_options_56_PreCreate(_inst,_other){_inst.gmltext="CONSOLE";_inst.gmldraw_box=false;_inst.gmlhalign=2;}
 function gml_RoomCC_rm_options_57_PreCreate(_inst,_other){
@@ -9933,6 +9992,138 @@ function gml_RoomCC_rm_frontoffice_28_PreCreate(_inst,_other){
     _inst.gmlonClickAction=function(_i,_o){rbTeams(_i,_o);};
 }
 var rbTm = null;
+
+// ---- STAT LEADERS: a button between HOME and the first tab of every Hall of Fame room opens this page (header with stars like the other pages) ----
+var rbSl = null;
+function rbSlBtn(_i,_o){
+    try {
+        var b = yyInst(_i, _o, instance_create_layer(63, 232, "Instances", 34));
+        b.gmltext = "STAT LEADERS";
+        b.image_xscale = 0.86;
+        b.gmlonClickAction = function (_a, _b) { rbStatLeaders(_a, _b); };
+    } catch (_e) { try { console.error("stat leaders button error", _e); } catch (_x) {} }
+}
+var RB_SL_CATS = [["PASS YDS", "yds"], ["PASS TD", "td"], ["RUSH YDS", "ryds"], ["RUSH TD", "rtd"], ["REC YDS", "recy"], ["REC TD", "rectd"], ["TACKLES", "tck"], ["INTS", "dint"], ["FF", "ff"], ["FUM", "fum"], ["SACKS", "sck"], ["FG MADE", "fgm"]];
+var RB_SL_TAGS = { 1: "QB", 2: "RB", 3: "TE", 4: "WR", 5: "OL", 6: "DL", 7: "LB", 8: "CB", 9: "S", 10: "K" };
+// a team's scoreboard colour (the one the in-game scoreboard uses) as a game colour value; white if the team has none
+function rbSlTeamCol(_i,_o,tm,ti){
+    try {
+        if (ti !== undefined && ti >= 0) {   // CPU team: look the colour up by its team code (JAX is JAC in the file)
+            rbScoreboardPal(_i, _o, "-1");
+            var tc = String(RB_ABBR[ti]).replace(/[^A-Za-z0-9]/g, "").toUpperCase(); if (tc === "JAX") { tc = "JAC"; }
+            var th = rbScoreboardTla[tc];
+            if (th && th.length === 6) { var tn = parseInt(th, 16); return (((tn & 255) << 16) | (((tn >> 8) & 255) << 8) | ((tn >> 16) & 255)); }
+        }
+        if (!tm) { return 16777215; }
+        var pal = rbScoreboardPal(_i, _o, ds_map_find_value(tm, "uid"));
+        if (pal) { return make_color_rgb(pal[2] * 256, pal[1] * 256, pal[0] * 256); }
+        // no scoreboard colour for this team: use its end-zone colour, which is what the game's scoreboard falls back to
+        var uid = ds_map_find_value(tm, "uid"); rbPrEzWarm(_i, _o, tm);
+        var hx = String((global.rbEzHex || {})[uid] || "");
+        if (hx.length >= 6) { var n = parseInt(hx.slice(0, 6), 16); return (((n & 255) << 16) | (((n >> 8) & 255) << 8) | ((n >> 16) & 255)); }
+    } catch (_e) {}
+    return 16777215;
+}
+function rbSlBuild(_i,_o){
+    var ent = [], yr = rbFalYear(_i, _o), root = null;
+    try { root = JSON.parse(rbFalGet() || "null"); } catch (_e) { root = null; }
+    if (root) {
+        for (var ti = 0; ti < RB_TEAMS.length; ti++) {
+            if (rbFalIsMine(_i, _o, ti)) { continue; }
+            var d = (ti === 0) ? root : (root.teams ? root.teams[ti] : null);
+            if (!d || !d.players) { continue; }
+            var tcol = 16777215; try { tcol = rbSlTeamCol(_i, _o, rbFalTeamMapOf(_i, _o, ti), ti); } catch (_e) {}
+            for (var n = 0; n < d.players.length; n++) {
+                var p = d.players[n], st = p.st || {}, cur = (st.gy === undefined || Number(st.gy) === yr), sv = {}, cv = {};
+                for (var k = 0; k < RB_GS_KEYS.length; k++) { var key = RB_GS_KEYS[k]; cv[key] = Number(st["gc_" + key]) || 0; sv[key] = cur ? (Number(st["gs_" + key]) || 0) : 0; }
+                ent.push({ n: String(p.fname || "").charAt(0) + ". " + p.lname, t: RB_ABBR[ti], pos: RB_SL_TAGS[rbFalBase(p.code)] || "", rt: Number(p.rating) || 0, col: tcol, s: sv, c: cv });
+            }
+        }
+    }
+    try {   // my own players: converted to the same record format the CPU uses
+        var g = yyInst(_i, _o, 97), ros = g.gmlroster, ini = rbMyInitials(_i, _o), mcol = rbSlTeamCol(_i, _o, g.gmlmyteam);
+        for (var r = 0; r < ds_list_size(ros); r++) {
+            var pm = ds_list_find_value(ros, r), tmp = {};
+            rbGsPack(pm, tmp);
+            var mrt = 0; try { mrt = Number(gml_Script_s_get_player_rating(_i, _o, pm)) || 0; } catch (_e) {}
+            ent.push({ n: String(ds_map_find_value(pm, "fname")).charAt(0) + ". " + ds_map_find_value(pm, "lname"), t: ini, pos: RB_SL_TAGS[rbFalBase(Number(ds_map_find_value(pm, "position")))] || "", rt: mrt, col: mcol, s: rbGsRead(tmp, "gs_"), c: rbGsRead(tmp, "gc_") });
+        }
+    } catch (_e) {}
+    return ent;
+}
+function rbStatLeaders(_i,_o){
+    var ent = []; try { ent = rbSlBuild(_i, _o); } catch (_e) { try { console.error("stat leaders data error", _e); } catch (_x) {} }
+    rbSl = { downId: "", ent: ent, cat: 0, per: 0, rects: {} }; global.rbSlOpen = true;
+}
+function rbSlArrows(o){ var a = rbTmArrows(o); a.l.x = 1; a.r.x = o.w - 1 - a.r.w; return a; }
+function rbSlClose(){ rbSl = null; global.rbSlOpen = false; global.rbBjCool = 4; }
+function rbSlStep(_i,_o){
+    var b = rbConBack(), o = rbBjOff(), ar = rbSlArrows(o), mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+    var inR = function (r) { return r && mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h; };
+    var id = inR(b) ? "back" : (inR(ar.l) ? "prev" : (inR(ar.r) ? "next" : (inR(rbSl.rects.cat) ? "cat" : (inR(rbSl.rects.per) ? "per" : ""))));
+    if (yyGetBool(mouse_check_button_pressed(1))) { rbSl.downId = id; }
+    if (yyGetBool(mouse_check_button_released(1))) {
+        var dn = rbSl.downId; rbSl.downId = "";
+        if (dn !== "" && dn === id) {
+            rbBjSound(_i, _o); var N = RB_SL_CATS.length;
+            if (id === "back") { rbSlClose(); return; }
+            if (id === "cat" || id === "next") { rbSl.cat = (rbSl.cat + 1) % N; } else if (id === "prev") { rbSl.cat = (rbSl.cat + N - 1) % N; } else if (id === "per") { rbSl.per = 1 - rbSl.per; }
+        }
+    }
+    if (yyGetBool(keyboard_check_pressed(27))) { rbBjSound(_i, _o); rbSlClose(); }
+}
+function rbSlDraw(_i,_o){
+    if (!rbSl) return;
+    var tmSave = rbTm;
+    try {
+        var o = rbBjOff();
+        draw_set_alpha(1); draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1);
+        draw_set_color(global.gmlc_background); draw_rectangle(0, 0, o.w, o.h, 0);
+        draw_set_font(global.gmlfnt_flex); draw_set_halign(1); draw_set_valign(1); draw_set_color(16777215);
+        var hTxt = "STAT LEADERS", hX = o.w * 0.5, hY = 16;
+        var hW = gml_Script_string_hd_width(_i, _o, hTxt) * 0.5 + sprite_get_width(123) + 16;
+        gml_Script_draw_hd_text(_i, _o, hX, hY, hTxt);
+        draw_sprite_ext(_i, 123, 0, hX - hW, hY, 2, 2, 0, 16777215, 1);
+        draw_sprite_ext(_i, 123, 0, hX + hW - 2, hY, -2, 2, 0, 16777215, 1);
+        // the list: top 10 for the chosen stat
+        var cat = RB_SL_CATS[rbSl.cat], key = cat[1], per = rbSl.per ? "c" : "s", list = [];
+        for (var e = 0; e < rbSl.ent.length; e++) { var v = rbSl.ent[e][per][key]; if (v > 0) { var en = rbSl.ent[e]; list.push({ n: en.n, t: en.t, pos: en.pos, rt: en.rt, col: en.col, v: v }); } }
+        list.sort(function (x, y) { return y.v - x.v; });
+        draw_set_font(global.gmlfnt_small_flex); draw_set_halign(1); draw_set_valign(1); draw_set_color(16777215);
+        gml_Script_draw_hd_text(_i, _o, o.w * 0.5, o.y + 44, cat[0] + " - " + (rbSl.per ? "CAREER" : "SEASON"));
+        draw_set_halign(0);
+        if (!list.length) { draw_set_halign(1); gml_Script_draw_hd_text(_i, _o, o.w * 0.5, o.y + 120, "NO STATS YET"); draw_set_halign(0); }
+        var stW = 1, stH = 1; try { stW = sprite_get_width(118); stH = sprite_get_height(118); } catch (_e) {}
+        var stSc = Math.min(1, 64 / Math.max(1, stW), 14 / Math.max(1, stH));
+        for (var i = 0; i < list.length && i < 10; i++) {
+            var ry = o.y + 67 + i * 16, vs = String(Math.round(Number(list[i].v) || 0)), rw = list[i];
+            draw_set_alpha(0.75); draw_set_color(16777215); draw_rectangle(o.x + 38, ry - 7, o.x + 442, ry + 7, 0); draw_set_alpha(1);   // white row, like the draft order
+            draw_set_color(rw.col); draw_set_halign(0);
+            gml_Script_draw_hd_text(_i, _o, o.x + 44, ry, (i + 1) + ".");
+            gml_Script_draw_hd_text(_i, _o, o.x + 62, ry, rw.n);
+            gml_Script_draw_hd_text(_i, _o, o.x + 170, ry, rw.pos);
+            gml_Script_draw_hd_text(_i, _o, o.x + 202, ry, rw.t);
+            draw_sprite_ext(_i, 118, rw.rt, o.x + 282, ry, stSc, stSc, 0, 65535, 1);
+            gml_Script_draw_hd_text(_i, _o, o.x + 434 - gml_Script_string_hd_width(_i, _o, vs), ry, vs);
+        }
+        draw_set_color(16777215);
+        // arrows + toggle buttons (stat / season-career)
+        var ar = rbSlArrows(o), amd = yyGetBool(mouse_check_button(1));
+        rbTmArrowDraw(_i, ar.l, 144, amd && rbSl.downId === "prev");
+        rbTmArrowDraw(_i, ar.r, 146, amd && rbSl.downId === "next");
+        rbTm = { downId: rbSl.downId };   // rbFalBtn reads the pressed id from rbTm
+        rbSl.rects.cat = rbFalBtn(_i, _o, 196, o.x + 133, o.y + 232, cat[0], "cat", 66);
+        rbSl.rects.per = rbFalBtn(_i, _o, 196, o.x + 219, o.y + 232, rbSl.per ? "CAREER" : "SEASON", "per", 66);
+        var b = rbConBack(), mx = device_mouse_x_to_gui(0), my = device_mouse_y_to_gui(0);
+        var pressed = mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h && amd && rbSl.downId === "back";
+        var ix = b.x + Math.floor(b.w / 2) + 1, iy = b.y + Math.floor(b.h / 2) - 1;
+        if (!pressed) { draw_sprite(_i, 129, 0, b.x, b.y); draw_sprite_ext(_i, 129, 2, b.x, b.y, 1, 1, 0, global.gmlc_background, 1); }
+        else { draw_sprite(_i, 129, 1, b.x, b.y); draw_sprite_ext(_i, 129, 2, b.x - 2, b.y + 2, 1, 1, 0, global.gmlc_background, 1); ix -= 2; iy += 2; }
+        draw_sprite(_i, 142, 0, ix, iy);
+        draw_set_halign(0); draw_set_color(16777215); draw_set_alpha(1);
+    } catch (_e) { try { console.error("stat leaders draw error", _e); } catch (_x) {} }
+    rbTm = tmSave;
+}
 // ---- Atlanta Falcons roster (shown on the Teams screen unless you coach the Falcons) ----
 // Generated once with the game's own player generator, saved in localStorage, kept the same every season; ages advance with the game's year.
 var RB_FAL_KEY = "RB_falcons";   // (old browser-storage key, no longer used: CPU rosters now live inside the save file)
@@ -9988,12 +10179,13 @@ function rbFalEncode(str){ try { return str ? btoa(unescape(encodeURIComponent(s
 function rbFalDecode(b64){ try { return b64 ? decodeURIComponent(escape(atob(b64))) : ""; } catch (_e) { return ""; } }
 var RB_FAL_RMIN = 5, RB_FAL_RMAX = 8, RB_FAL_SMIN = 9, RB_FAL_SMAX = 10, RB_FAL_VER = 3;   // normal players roll 5-8 stars, the few standouts 9-11; bump RB_FAL_VER to re-roll everyone
 var RB_FAL_SPEC = [[1, 1, "QB"], [2, 1, "RB"], [3, 1, "TE"], [4, 3, "WR"], [5, 5, "OL"], [6, 4, "DL"], [7, 3, "LB"], [8, 2, "CB"], [9, 2, "S"], [10, 1, "K"]];
-var RB_FAL_STK = ["skill", "speed", "strength", "stamina", "max_skill", "max_speed", "max_strength", "max_stamina", "attitude", "salary", "contract"];
+var RB_FAL_STK = ["skill", "speed", "strength", "stamina", "max_skill", "max_speed", "max_strength", "max_stamina", "attitude", "salary", "contract", "dev_trait"];   // dev_trait rides along in every saved CPU record so it survives saves, trades, cuts and signings
 function rbFalStats(pm){
     var st = {};
     for (var k = 0; k < RB_FAL_STK.length; k++) {
         try { if (yyGetBool(ds_map_exists(pm, RB_FAL_STK[k]))) { var v = rbN(ds_map_find_value(pm, RB_FAL_STK[k])); if (isFinite(v)) st[RB_FAL_STK[k]] = v; } } catch (_e) {}
     }
+    rbGsPack(pm, st);
     return st;
 }
 // Teams in cycling order: [display name, regex keyword for "you coach this team", helmet, jersey, pants]
@@ -10121,7 +10313,7 @@ function rbFalLoad(_i,_o,ti){
     for (var i = 0; i < d.players.length; i++) {
         var p = d.players[i], m = ds_map_create();
         if (!p.st || needV) {   // saved before profiles / before the generation buff: roll stats for this player once and keep them
-            try { var pm2 = gml_Script_s_create_player(_i, _o, p.code, Math.max(21, Number(p.age0) || 24), starSet[i] ? RB_FAL_SMIN : RB_FAL_RMIN, starSet[i] ? RB_FAL_SMAX : RB_FAL_RMAX); p.st = rbFalStats(pm2); try { p.rating = Number(gml_Script_s_get_player_rating(_i, _o, pm2)); } catch (_e) {} try { ds_map_destroy(pm2); } catch (_e) {} rtChanged = true; } catch (_e) { p.st = {}; }
+            try { var pm2 = gml_Script_s_create_player(_i, _o, p.code, Math.max(21, Number(p.age0) || 24), starSet[i] ? RB_FAL_SMIN : RB_FAL_RMIN, starSet[i] ? RB_FAL_SMAX : RB_FAL_RMAX); var oldSt = p.st; p.st = rbFalStats(pm2); rbGsCarry(oldSt, p.st); try { p.rating = Number(gml_Script_s_get_player_rating(_i, _o, pm2)); } catch (_e) {} try { ds_map_destroy(pm2); } catch (_e) {} rtChanged = true; } catch (_e) { p.st = {}; }
         }
         ds_map_set(m, "position", p.code); ds_map_set(m, "skin", p.skin); ds_map_set(m, "face_set", p.face_set);
         ds_map_set(m, "face_x", p.face_x); ds_map_set(m, "face_y", p.face_y); ds_map_set(m, "teamid", (-1));
@@ -10129,10 +10321,11 @@ function rbFalLoad(_i,_o,ti){
         var age = p.age0 + (yr - d.y0);
         for (var sk in p.st) { ds_map_set(m, sk, p.st[sk]); }
         ds_map_set(m, "age", age); ds_map_set(m, "condition", (p.inj > 0) ? -p.inj : 100); ds_map_set(m, "resting", 0);
+        if (!yyGetBool(ds_map_exists(m, "dev_trait"))) { try { rbDevRoll(_i, _o, m); if (!p.st) { p.st = {}; } p.st.dev_trait = Number(ds_map_find_value(m, "dev_trait")); rtChanged = true; } catch (_e) {} }   // CPU player with no saved trait: roll it once from potential and keep it
         if (!(Number(p.morale) >= 0)) { var at0 = Number((p.st || {}).attitude); p.morale = isFinite(at0) ? Math.max(0, Math.min(100, at0 + 10)) : 75; }
         ds_map_set(m, "morale", Math.round(p.morale));
         var rt2 = Number(p.rating) >= 1 ? Number(p.rating) : 6; try { var rr = Number(gml_Script_s_get_player_rating(_i, _o, m)); if (rr >= 1) rt2 = rr; } catch (_e) {}
-        list.push({ m: m, num: p.num, tag: p.tag, code: p.code, rating: rt2, name: p.lname, fname: p.fname, age: age, inj: (p.inj > 0) ? p.inj : 0 });
+        list.push({ m: m, num: p.num, tag: p.tag, code: p.code, rating: rt2, name: p.lname, fname: p.fname, age: age, inj: (p.inj > 0) ? p.inj : 0, gs: p.st });
     }
     if (needV) { d.v = RB_FAL_VER; rtChanged = true; }
     if (rtChanged) { save(); }
@@ -10206,6 +10399,8 @@ function rbFalTradeSwap(_i,_o,pm){
             ds_map_set(pm, "position", pin.code); ds_map_set(pm, "fname", pin.fname); ds_map_set(pm, "lname", pin.lname);
             ds_map_set(pm, "skin", pin.skin); ds_map_set(pm, "face_set", pin.face_set); ds_map_set(pm, "face_x", pin.face_x); ds_map_set(pm, "face_y", pin.face_y);
             for (var sk in (pin.st || {})) { ds_map_set(pm, sk, pin.st[sk]); }
+            rbGsUnpack(pin.st, pm);
+            if (!pin.st || pin.st.dev_trait === undefined) { pin.st = pin.st || {}; pin.st.dev_trait = rbDevEnsure(pm); try { rbFalPut(JSON.stringify(sv.root)); } catch (_e2) {} }
             ds_map_set(pm, "age", Number(pin.age0) + (yr - sv.d.y0)); ds_map_set(pm, "condition", 100); ds_map_set(pm, "resting", 0);
             ds_map_set(pm, "teamid", ds_map_find_value(rbFalTeamMapOf(_i,_o,ti), "uid"));
             ds_map_set(pm, "rb_ti", ti); ds_map_set(pm, "rb_num", pin.num); ds_map_set(pm, "rb_code", pin.code);
@@ -10635,38 +10830,84 @@ function rbSimRegSeason(_i,_o){
     var g = yyInst(_i,_o,97);
     var target = Number(g.gmlfirst_week_playoffs);
     if (Number(g.gmlweek) >= target) { try { alert("The regular season is already over."); } catch (_e) {} return; }
-    var rep = { claimed:0, ups:0, games:0, w:0, l:0, t:0, cc:0, lost:0, inj:[], log:[] }, guard = 0, cc0 = Number(g.gmlcoach_credit);
-    while (Number(g.gmlweek) < target && guard++ < 40) {
-        var wk = Number(g.gmlweek), moraleSnap = rbSzMoraleSnap(g);
-        var fix = gml_Script_s_get_human_fixture_by_week(g,_o,wk);
-        var live = (fix !== -4 && fix && ds_map_find_value(fix,"human_win") === "unplayed");
-        if (live) {
-            rbSzPlayGame(_i,_o,g,fix,rep);
-            gml_Script_s_do_next_week(g,_o);
-            try { gml_Script_s_do_postmatch_effects(g,_o); } catch (_e) {}
-        } else {
-            gml_Script_s_do_schedule(g,_o,false);
-            try {
-                gml_Script_s_rehab_effect(g,_o,yyftime(g.gmlfacility_rehab,10),false);
-                gml_Script_s_injury_effect_on_attitude(g,_o);
-                gml_Script_s_toxic_effect_on_morale(g,_o);
-                gml_Script_s_add_xp_gain_all(g,_o,10,false);
-                rbSzLevelUp(_i,_o,g,rep);
-            } catch (_e) {}
-            gml_Script_s_do_next_week(g,_o);
-        }
-        try { rbSzMoraleFix(g,moraleSnap,(live ? String(ds_map_find_value(fix,"human_win")) : "bye")); } catch (_e) {}
+    if (rbCd) return;
+    // runs on the loading page (one week per frame), then a results panel with a CONTINUE button
+    rbCd = { mode: "sim", title: "SIMMING REGULAR SEASON", wait: 3, k: 0, guard: 0, done: false, lines: [],
+             total: Math.max(1, Math.min(40, target - Number(g.gmlweek))),
+             rep: { claimed:0, ups:0, games:0, w:0, l:0, t:0, cc:0, lost:0, inj:[], log:[] },
+             cc0: Number(g.gmlcoach_credit) };
+    global.rbCdOpen = true;
+    try { room_goto(14); } catch (_e) {}
+}
+function rbSzSimOneWeek(_i,_o,g,rep){
+    var wk = Number(g.gmlweek), moraleSnap = rbSzMoraleSnap(g);
+    var fix = gml_Script_s_get_human_fixture_by_week(g,_o,wk);
+    var live = (fix !== -4 && fix && ds_map_find_value(fix,"human_win") === "unplayed");
+    if (live) {
+        rbSzPlayGame(_i,_o,g,fix,rep);
+        gml_Script_s_do_next_week(g,_o);
+        try { gml_Script_s_do_postmatch_effects(g,_o); } catch (_e) {}
+    } else {
+        gml_Script_s_do_schedule(g,_o,false);
+        try {
+            gml_Script_s_rehab_effect(g,_o,yyftime(g.gmlfacility_rehab,10),false);
+            gml_Script_s_injury_effect_on_attitude(g,_o);
+            gml_Script_s_toxic_effect_on_morale(g,_o);
+            gml_Script_s_add_xp_gain_all(g,_o,10,false);
+            rbSzLevelUp(_i,_o,g,rep);
+        } catch (_e) {}
+        gml_Script_s_do_next_week(g,_o);
     }
+    try { rbSzMoraleFix(g,moraleSnap,(live ? String(ds_map_find_value(fix,"human_win")) : "bye")); } catch (_e) {}
+}
+function rbSzSimFinish(_i,_o,g,rep,cc0){
     try { rbSzClaimAll(_i,_o,g,rep); } catch (_e) {}
     try { gml_Script_s_update_human_fixtures(g,_o); } catch (_e) {}
-    var msg = "REGULAR SEASON COMPLETE: " + rep.w + "-" + rep.l + (rep.t ? ("-" + rep.t) : "") +
-        "\nCoach credits: +" + rep.cc + " earned, -" + rep.lost + " lost (medical fees), now " + Number(g.gmlcoach_credit) +
-        "\nSkill points earned (level-ups): " + rep.ups + "  |  Upgrades claimed: " + rep.claimed + "\nInjuries: " + (rep.inj.length ? rep.inj.join(", ") : "none") + "\n\n" + rep.log.join("\n");
+    var lines = [
+        "REGULAR SEASON COMPLETE: " + rep.w + "-" + rep.l + (rep.t ? ("-" + rep.t) : ""),
+        "Coach credits: +" + rep.cc + " earned, -" + rep.lost + " lost (medical fees), now " + Number(g.gmlcoach_credit),
+        "Skill points earned (level-ups): " + rep.ups + "  |  Upgrades claimed: " + rep.claimed,
+        "Injuries: " + (rep.inj.length ? rep.inj.join(", ") : "none")
+    ];
     try { gml_Script_s_add_news(g,_o,"Sim complete: " + rep.w + "-" + rep.l + ". CCs " + (Number(g.gmlcoach_credit) - cc0 >= 0 ? "+" : "") + (Number(g.gmlcoach_credit) - cc0)); } catch (_e) {}
     try { gml_Script_s_savegame(g,_o); } catch (_e) {}
     g.gmlstage = 1;
-    room_goto(14);
-    try { alert(msg); } catch (_e) {}
+    return lines;
+}
+// loading-page tick for the sim: one week per frame, or many when SKIP ALL is pressed; then the results wait for CONTINUE
+function rbSimQuiet(){ try { return !!(rbCd && rbCd.mode === "sim"); } catch (_e) { return false; } }
+function rbSzSimContBtn(o){ return { x: Math.round(o.w * 0.5 + 6), y: o.y + 236, w: 110, h: 22 }; }
+function rbSzSimSkipBtn(o){ return { x: Math.round(o.w * 0.5 - 116), y: o.y + 236, w: 110, h: 22 }; }
+function rbSzSimTick(_i,_o){
+    var g = yyInst(_i,_o,97), target = Number(g.gmlfirst_week_playoffs);
+    var o = rbBjOff(), sk = rbSzSimSkipBtn(o), ct = rbSzSimContBtn(o);
+    if (false) {
+        rbCd.skipAll = true;
+        try { gml_Script_s_msg_clear(_i, _o, -4); } catch (_e) {}   // close the prompts that are already up
+    }
+    if (rbCd.done) {
+        if (rbGLClicked(ct.x, ct.y, ct.w, ct.h)) { rbCd = null; global.rbCdOpen = false; global.rbBjCool = 4; }
+        return;
+    }
+    var n = rbCd.skipAll ? 40 : 1;   // skipping: many weeks per frame so the prompts never queue up
+    while (n-- > 0 && rbCd.k < rbCd.total && Number(g.gmlweek) < target && rbCd.guard++ < 40) {
+        rbSzSimOneWeek(_i, _o, g, rbCd.rep); rbCd.k++;
+    }
+    if (rbCd.k < rbCd.total && Number(g.gmlweek) < target && rbCd.guard < 40) { return; }
+    rbSzSimFinish(_i, _o, g, rbCd.rep, rbCd.cc0);   // claims upgrades, saves; no results panel any more: go straight back to the game
+    rbCd = null; global.rbCdOpen = false; global.rbBjCool = 4;
+}
+function rbSzSimResultDraw(o){ return;
+    draw_set_halign(1); draw_set_color(16777215);
+    if (rbCd.done) {
+        for (var i = 0; i < rbCd.lines.length && i < 8; i++) { draw_text(o.w * 0.5, o.y + 176 + i * 12, rbCd.lines[i]); }
+    }
+    var sk = rbSzSimSkipBtn(o), ct = rbSzSimContBtn(o);
+    draw_set_color(16777215); draw_rectangle(sk.x, sk.y, sk.x + sk.w, sk.y + sk.h, 0);
+    draw_set_color(global.gmlc_background); draw_text(sk.x + sk.w * 0.5, sk.y + 5, rbCd.skipAll ? "SKIPPING..." : "SKIP ALL");
+    draw_set_color(rbCd.done ? 16777215 : 8421504); draw_rectangle(ct.x, ct.y, ct.x + ct.w, ct.y + ct.h, 0);
+    draw_set_color(global.gmlc_background); draw_text(ct.x + ct.w * 0.5, ct.y + 5, "CONTINUE");
+    draw_set_color(16777215);
 }
 function gml_RoomCC_rm_pre_match_rbsz_PreCreate(_inst,_other){
     var t = gml_Script_s_str(_inst,_inst,"ui_SimGame"), s = "Sim Reg. Szn";
@@ -10756,14 +10997,14 @@ function rbCpuSwapBefore(_i,_o){
         var yr = rbFalYear(_i,_o), LIM = { 1: 1, 2: 1, 3: 1, 4: 3, 5: 5, 6: 4, 7: 3, 8: 2, 9: 2, 10: 1 }, TAGS = { 1: "QB", 2: "RB", 3: "TE", 4: "WR", 5: "OL", 6: "DL", 7: "LB", 8: "CB", 9: "S", 10: "K" };
         // 1. the CPU roster of the team I am about to coach (depth-chart order: starters first), as plain objects
         var inc = [], list = rbFalLoad(_i,_o,newTi);
-        for (var a = 0; a < list.length; a++) { var o = rbSwapSnap(list[a].m); o.rating = list[a].rating; inc.push(o); }
+        for (var a = 0; a < list.length; a++) { var o = rbSwapSnap(list[a].m); o.rating = list[a].rating; o.gst = {}; rbGsCarry(list[a].gs, o.gst); inc.push(o); }
         rbFalFree(list);
         // 2. the roster I am leaving, as plain objects
         var out = [], ros = g.gmlroster;
         for (var r = 0; r < ds_list_size(ros); r++) {
             var pm = ds_list_find_value(ros, r), so = rbSwapSnap(pm), rt = 6;
             try { rt = Number(gml_Script_s_get_player_rating(_i,_o,pm)); if (!(rt >= 1)) { rt = 6; } } catch (_e) {}
-            so.rating = rt; out.push(so);
+            so.rating = rt; so.gst = {}; rbGsPack(pm, so.gst); out.push(so);
         }
         // 3. write my old players into the old team's CPU data; empty starting spots get filled with fresh players, at most 26 players
         var sv = rbFalSaved(_i,_o,oldTi);
@@ -10777,6 +11018,7 @@ function rbCpuSwapBefore(_i,_o){
                                attitude: o2.attitude, salary: o2.salary, contract: o2.contract },
                          fname: String(o2.fname), lname: String(o2.lname), skin: o2.skin, face_set: o2.face_set, face_x: o2.face_x, face_y: o2.face_y };
             };
+            var mk0 = mk; mk = function (o2, code, rating) { var r0 = mk0(o2, code, rating); rbGsCarry(o2.gst, r0.st); return r0; };
             for (var q = 0; q < out.length && np.length < RB_CPU_MAXR; q++) { np.push(mk(out[q], Number(out[q].position), out[q].rating)); }
             var cnt = {}; for (var c = 0; c < np.length; c++) { var cb = rbFalBase(np[c].code); cnt[cb] = (cnt[cb] || 0) + 1; }
             for (var fp = 1; fp <= 10; fp++) {
@@ -10818,6 +11060,7 @@ function rbCpuSwapAfter(_i,_o){
             if (key === "skill" || key === "speed" || key === "strength" || key === "stamina" || key === "max_skill" || key === "max_speed" || key === "max_strength" || key === "max_stamina") { v = Math.max(1, Math.min(10, Math.round(Number(v)))); }
             ds_map_set(pm, key, v);
         }
+        rbGsUnpack(o.gst, pm);
         ds_map_set(pm, "signed_year", (-1)); ds_map_set(pm, "teamid", g.gmlmyteam_id);
         ds_list_add(ros, pm);
     }
@@ -10934,6 +11177,7 @@ function rbCutPoolToStore(_i,_o){
                 if (stk.indexOf(sk) >= 0) { v = Math.max(1, Math.min(10, Math.round(v))); }
                 ds_map_set(pm, sk, v);
             }
+            rbGsUnpack(st, pm);
             ds_map_set(pm, "teamid", (-1)); ds_map_set(pm, "contract", 3); ds_map_set(pm, "cutid", o.id);
             var rt = 5; try { rt = Number(gml_Script_s_get_player_rating(_i, _o, pm)); if (!(rt >= 1)) { rt = 5; } } catch (_e) {}
             var sal = Number(ds_map_find_value(pm, "salary")) || 0;
@@ -11084,9 +11328,23 @@ function rbCdFinish(_i,_o){
     if (m === "order") { try { if (rbPr) { rbPr.ordRound = 1; rbPr.ordList = rbPrOrderBuild(_i, _o); rbPr.ordScroll = 0; rbPr.ordDrag = null; rbPr.ord = true; } } catch (_e) {} return; }   // team colours are loaded: show the DRAFT ORDER
     if (m === "teams" && af === "store") { room_goto(8); } else if (m === "teams") { rbTeamsOpen(_i,_o); } else { room_goto(14); }
 }
+// CONTINUE into the next season: the game builds the new season in one go, so it runs on the loading page like the other long jobs
+function rbSeasonLoad(_i,_o,arg){
+    if (rbCd) { gml_Script_s_start_new_season(_i, _o, arg); return; }
+    rbCd = { mode: "season", title: "STARTING NEW SEASON", wait: 3, k: 0, total: 3, args: [_i, _o, arg] };
+    global.rbCdOpen = true;
+    try { room_goto(14); } catch (_e) {}
+}
 function rbCdStep(_i,_o){
     rbCd.stepN = (rbCd.stepN || 0) + 1;
     if (rbCd.wait > 0) { rbCd.wait--; return; }   // let the page show before the work starts
+    if (rbCd.mode === "sim") { rbSzSimTick(_i,_o); return; }
+    if (rbCd.mode === "season") {   // two frames to show the bar, then the real work, then on to the new season's screen
+        if (rbCd.k < 2) { rbCd.k++; return; }
+        var sa = rbCd.args;
+        try { gml_Script_s_start_new_season(sa[0], sa[1], sa[2]); } catch (_e) { try { console.error("new season error", _e); } catch (_x) {} }
+        rbCd.k = rbCd.total; rbCdFinish(_i, _o); return;
+    }
     if (rbCd.mode === "class") {   // first time the draft class is opened: the game generates it (and saves) on a loading page
         if (!rbCd.half) { rbCd.half = true; rbCd.k = 1; return; }
         try { if (ds_list_size(yyInst(_i, _o, 97).gmldraftlist) < 1) { gml_Script_s_create_draftlist(_i, _o); } } catch (_e) { try { console.error("draft class error", _e); } catch (_x) {} }
@@ -11155,6 +11413,13 @@ function rbCdStep(_i,_o){
             if (rbCd.k < RB_TEAMS.length) { return; }
             try { gml_Script_s_savegame(_i, _o); } catch (_e) { try { alert("Saving after the CPU draft failed (browser storage may be full):\n" + String(_e)); } catch (_x) {} }
         }
+        rbCd.title = "GENERATING DRAFT CLASS"; rbCd.k = 0; rbCd.total = 2; rbCd.stage = 4; rbCd.clsWait = 2; return;
+    }
+    if (rbCd.stage === 4) {   // STEP 5: CPU rosters are final, so build the new draft class now (same loading page)
+        if (rbCd.clsWait > 0) { rbCd.clsWait--; rbCd.k = 1; return; }
+        try { if (ds_list_size(yyInst(_i, _o, 97).gmldraftlist) < 1) { gml_Script_s_create_draftlist(_i, _o); } } catch (_e) { try { console.error("draft class error", _e); } catch (_x) {} }
+        try { gml_Script_s_savegame(_i, _o); } catch (_e) {}
+        rbCd.k = rbCd.total;
     }
     rbCdFinish(_i, _o);
 }
@@ -11184,6 +11449,7 @@ function rbCdDrawInner(_i,_o){
     draw_rectangle(bx - 2, by - 2, bx + bw + 2, by + bh + 2, 0);
     draw_set_color(global.gmlc_background); draw_rectangle(bx, by, bx + bw, by + bh, 0);
     draw_set_color(16777215); draw_rectangle(bx, by, bx + Math.round(bw * f), by + bh, 0);
+    if (rbCd.mode === "sim") { rbSzSimResultDraw(o); }
     draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215);
 }
 function rbFalCard(_i,_o,x,y,p,sc,pr){
@@ -11341,13 +11607,14 @@ function rbFalBar(_i,_o,x,y,label,val,mx){
 }
 function rbFalProfile(_i,_o,o){
     var P = rbTm.prof;
-    if (!P) { rbTm.sel = -1; rbTm.devM = null; return; }
+    if (!P) { rbTm.sel = -1; rbTm.devM = null; rbTm.statsOn = false; rbTm.statsBtn = null; rbTm.sPrev = null; rbTm.sNext = null; return; }
     var it = P.it, m = it.m, pos = it.code;
     draw_set_font(global.gmlfnt_small_flex); draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
     var pw = 208, ph = 172, lx = o.x + 24, ty = o.y + 40;
     rbFalBox(_i, _o, lx, ty, pw, ph, "DETAILS");
-    var dv = rbDevScreenBox(_i, _o, rbTm, o.x + 248, ty, pw, ph, m);
-    if (dv) { rbFalBox(_i, _o, dv.x, dv.y, dv.w, dv.h, "DEV TRAIT"); rbDevLabel(_i, _o, rbTm.devLbl.lx, rbTm.devLbl.ly, m); } else { rbFalBox(_i, _o, o.x + 248, ty, pw, ph, "SKILLS"); }
+    var dv = rbTm.statsOn ? null : rbDevScreenBox(_i, _o, rbTm, o.x + 248, ty, pw, ph, m);
+    if (rbTm.statsOn) { rbDevHide(); rbFalStatsPanel(_i, _o, o.x + 248, ty, pw, ph, it); }
+    else if (dv) { rbFalBox(_i, _o, dv.x, dv.y, dv.w, dv.h, "DEV TRAIT"); rbDevLabel(_i, _o, rbTm.devLbl.lx, rbTm.devLbl.ly, m); } else { rbFalBox(_i, _o, o.x + 248, ty, pw, ph, "SKILLS"); }
     // card (Falcons colours), top-right of the details panel
     var oh = _i.gmlhelmet, os = _i.gmlshirt, op = _i.gmlpants;
     rbFalCols(_i);
@@ -11386,7 +11653,7 @@ function rbFalProfile(_i,_o,o){
     else if (pos === 6 || pos === 15 || pos === 7 || pos === 8 || pos === 9) { skl = "Tackling"; }
     var bx = o.x + 256;
     var rbMs = rbMasterScout(_i, _o, m);
-    if (!dv) {
+    if (!dv && !rbTm.statsOn) {
         rbFalBar(_i, _o, bx, o.y + 64, skl, rbFalV(m, "skill"), rbFalV(m, rbMs ? "max_skill" : "skill"));
         rbFalBar(_i, _o, bx, o.y + 104, str, rbFalV(m, "strength"), rbFalV(m, rbMs ? "max_strength" : "strength"));
         rbFalBar(_i, _o, bx, o.y + 144, "Speed", rbFalV(m, "speed"), rbFalV(m, rbMs ? "max_speed" : "speed"));
@@ -11394,7 +11661,162 @@ function rbFalProfile(_i,_o,o){
     }
     // TRADE button under the details panel (game-style slim button); opens the trade page
     rbTm.tradeBtn = rbFalBtn(_i, _o, 196, Math.round(lx + (pw - sprite_get_width(196)) / 2), o.y + 218, "TRADE", "trade", 0);
+    rbTm.statsBtn = rbFalBtn(_i, _o, 196, Math.round(o.x + 248 + (pw - sprite_get_width(196)) / 2), o.y + 218, rbTm.statsOn ? "SKILLS" : "STATS", "stats", 0);
+    if (!rbTm.statsOn) { rbTm.sPrev = null; rbTm.sNext = null; }
     draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
+}
+
+// ---- CPU player stats: each CPU player record keeps game stats ("gs": last game / season / career), added once per week of the regular season ----
+// fields: g games, att/cmp/yds/td/int passing, ratt/ryds/rtd rushing, rec/recy/rectd receiving, tck/sck/dint defense, fum, fga/fgm/xpa/xpm kicking
+var RB_GS_KEYS = ["g", "att", "cmp", "yds", "td", "int", "ratt", "ryds", "rtd", "rec", "recy", "rectd", "tck", "sck", "dint", "ff", "fum", "fga", "fgm", "xpa", "xpm"];
+function rbGsNew() { var o = {}; for (var k = 0; k < RB_GS_KEYS.length; k++) { o[RB_GS_KEYS[k]] = 0; } return o; }
+function rbGsGame(code, rt, st) {
+    var q = rbGsNew(), R = Math.random, k = rt / 10;
+    var ri = function (a, b) { return a + Math.floor(R() * (b - a + 1)); };
+    var bin = function (n, p) { var c = 0; p = Math.max(0, Math.min(0.95, p)); for (var i = 0; i < n; i++) { if (R() < p) { c++; } } return c; };
+    var bp = (code === 15) ? 6 : ((code === 16) ? 5 : code);
+    if (bp === 5) { q.g = st ? 1 : 0; return q; }
+    if (bp <= 4) {   // offensive skill players only play when they start
+        if (!st) { return q; }
+        q.g = 1;
+        if (bp === 1) {
+            q.att = ri(20, 36); q.cmp = Math.min(q.att, Math.round(q.att * (0.46 + 0.04 * rt + (R() * 0.12 - 0.06))));
+            q.yds = Math.round(q.cmp * (8.5 + 0.35 * rt + R() * 3)); q.td = bin(4, (0.1 + 0.04 * rt) * 1.15); q.int = bin(3, 0.24 - 0.015 * rt);
+            q.ratt = ri(1, 6); q.ryds = Math.round(q.ratt * (2 + R() * 4)); q.rtd = (R() < 0.05) ? 1 : 0; q.fum = (R() < 0.12) ? 1 : 0;
+        } else if (bp === 2) {
+            q.ratt = Math.round(ri(10, 24) * (0.8 + k * 0.4)); q.ryds = Math.round(q.ratt * (3.2 + 0.2 * rt + R() * 2) * 0.91); q.rtd = bin(2, 0.1 + 0.03 * rt);
+            q.rec = bin(4, 0.45); q.recy = Math.round(q.rec * (5 + R() * 4)); q.fum = (R() < 0.08) ? 1 : 0;
+        } else if (bp === 4) {
+            q.rec = bin(8, 0.25 + 0.04 * rt); q.recy = Math.round(q.rec * (9 + 0.8 * rt + R() * 5)); q.rectd = bin(2, (0.05 + 0.02 * rt) * 1.15); q.fum = (R() < 0.04) ? 1 : 0;
+        } else {
+            q.rec = bin(6, 0.2 + 0.03 * rt); q.recy = Math.round(q.rec * (7 + 0.5 * rt + R() * 4)); q.rectd = bin(2, (0.05 + 0.015 * rt) * 1.15);
+        }
+        return q;
+    }
+    if (bp === 10) {
+        if (!st) { return q; }
+        q.g = 1; q.xpa = ri(1, 5); for (var x = 0; x < q.xpa; x++) { if (R() < 0.9 + 0.008 * rt) { q.xpm++; } }
+        q.fga = ri(0, 4); for (var f = 0; f < q.fga; f++) { if (R() < 0.6 + 0.03 * rt) { q.fgm++; } }
+        return q;
+    }
+    q.g = 1;   // defense: starters play the whole game, backups get a few tackles
+    var sc = st ? 1 : 0.3;
+    q.ff = bin(1, (0.03 + 0.006 * rt) * sc);
+    if (bp === 6) { q.tck = Math.round(ri(1, 5) * sc); q.sck = bin(3, (0.08 + 0.02 * rt) * sc); }
+    else if (bp === 7) { q.tck = Math.round(ri(3, 9) * sc); q.sck = bin(2, (0.07 + 0.015 * rt) * sc); q.dint = bin(1, (0.04 + 0.01 * rt) * sc); }
+    else if (bp === 8) { q.tck = Math.round(ri(1, 5) * sc); q.dint = bin(2, (0.04 + 0.01 * rt) * sc); }
+    else { q.tck = Math.round(ri(2, 7) * sc); q.dint = bin(1, (0.05 + 0.012 * rt) * sc); }
+    return q;
+}
+function rbCpuStatsWeek(_i, _o) {
+    try {
+        var g = yyInst(_i, _o, 97);
+        if (g.gmlqb_mode) { return; }
+        try { if (yyGetBool(gml_Script_s_is_co_mode(_i, _o))) { return; } } catch (_e) {}
+        if (yyGetBool(g.gmldone_season_review)) { return; }
+        var wk = Number(g.gmlweek) + 1, fpw = Number(g.gmlfirst_week_playoffs);
+        if (!(wk >= 1) || (fpw > 1 && wk >= fpw)) { return; }   // regular season only
+        var root = null; try { root = JSON.parse(rbFalGet() || "null"); } catch (_e) { root = null; }
+        if (!root) { return; }
+        var yr = rbFalYear(_i, _o);
+        if (root.sw && root.sw.y === yr && root.sw.w >= wk) { return; }   // this week is already counted
+        root.sw = { y: yr, w: wk };
+        var LIM = { 1: 1, 2: 1, 3: 1, 4: 3, 5: 5, 6: 4, 7: 3, 8: 2, 9: 2, 10: 1 };
+        for (var ti = 0; ti < RB_TEAMS.length; ti++) {
+            if (rbFalIsMine(_i, _o, ti)) { continue; }
+            var d = (ti === 0) ? root : (root.teams ? root.teams[ti] : null);
+            if (!d || !d.players || !d.players.length) { continue; }
+            var grp = {};
+            for (var a = 0; a < d.players.length; a++) { var b = rbFalBase(d.players[a].code); (grp[b] = grp[b] || []).push(d.players[a]); }
+            for (var gk in grp) { grp[gk].sort(function (x, y) { return (Number(y.rating) || 0) - (Number(x.rating) || 0); }); }
+            for (var n = 0; n < d.players.length; n++) {
+                var p = d.players[n];
+                if (p.inj > 0) { continue; }   // hurt players don't play
+                var bp = rbFalBase(p.code), st = grp[bp].indexOf(p) < (LIM[bp] || 1);
+                var gm = rbGsGame(p.code, Number(p.rating) || 5, st);
+                var sx = p.st || (p.st = {});
+                if (sx.gy !== undefined && sx.gy !== yr) { for (var k0 = 0; k0 < RB_GS_KEYS.length; k0++) { delete sx["gs_" + RB_GS_KEYS[k0]]; } }   // new season: season stats start over, career stays
+                sx.gy = yr;
+                for (var kk = 0; kk < RB_GS_KEYS.length; kk++) {
+                    var key = RB_GS_KEYS[kk], v = gm[key] || 0;
+                    if (v) { sx["gl_" + key] = v; sx["gs_" + key] = (sx["gs_" + key] || 0) + v; sx["gc_" + key] = (sx["gc_" + key] || 0) + v; } else { delete sx["gl_" + key]; }
+                }
+            }
+        }
+        rbFalPut(JSON.stringify(root));
+    } catch (_e) { try { console.error("cpu stats week error", _e); } catch (_x) {} }
+}
+// ---- CPU stats follow the player: they live in the record's "st" block as flat keys (gl_ last game, gs_ season, gc_ career, gy year; zero = missing),
+// so every roster move that copies "st" carries them. Between a record and a real game player they are converted to / from the game's own
+// stat_ / season_ / career_ keys (rbGsPack: player -> record, rbGsUnpack: record -> player), so your stats menu and the CPU one always agree.
+function rbGsMap(code) {
+    var bp = (code === 15) ? 6 : ((code === 16) ? 5 : code);
+    if (bp === 1) { return [["att", "attempts"], ["cmp", "complete"], ["yds", "yards"], ["td", "touchdowns"], ["int", "int"], ["ratt", "rush_attempts"], ["ryds", "rush_yards"], ["rtd", "rush_touchdowns"], ["fum", "fumbles"]]; }
+    if (bp === 2) { return [["ratt", "rush_attempts"], ["ryds", "rush_yards"], ["rtd", "rush_touchdowns"], ["rec", "attempts"], ["recy", "yards"], ["rectd", "touchdowns"], ["fum", "fumbles"]]; }
+    if (bp === 3 || bp === 4) { return [["rec", "attempts"], ["recy", "yards"], ["rectd", "touchdowns"], ["fum", "fumbles"]]; }
+    if (bp === 10) { return [["fga", "attempts"], ["fgm", "complete"], ["xpa", "attempts_XP"], ["xpm", "complete_XP"]]; }
+    return [["tck", "tackles"], ["sck", "sacks"], ["dint", "int"], ["ff", "ff"]];
+}
+var RB_GS_PRE = [["gl_", "stat_"], ["gs_", "season_"], ["gc_", "career_"]];
+function rbGsRead(st, pre) { var o = rbGsNew(); if (st) { for (var k = 0; k < RB_GS_KEYS.length; k++) { o[RB_GS_KEYS[k]] = Number(st[pre + RB_GS_KEYS[k]]) || 0; } } return o; }
+function rbGsCarry(oldSt, newSt) { if (!oldSt || !newSt) { return; } for (var k in oldSt) { if (/^(gl_|gs_|gc_)/.test(k) || k === "gy") { newSt[k] = oldSt[k]; } } }
+function rbGsYr() { try { var y = Number(yyInst(null, null, 97).gmlyear); return isFinite(y) ? y : 0; } catch (_e) { return 0; } }
+function rbGsPack(pm, st) {
+    try {
+        var mp = rbGsMap(Number(ds_map_find_value(pm, "position")));
+        for (var w = 0; w < 3; w++) {
+            var fl = RB_GS_PRE[w][0], gp = RB_GS_PRE[w][1], tot = 0;
+            for (var k = 0; k < mp.length; k++) {
+                var key = gp + mp[k][1]; if (!yyGetBool(ds_map_exists(pm, key))) { continue; }
+                var v = rbN(ds_map_find_value(pm, key)); if (isFinite(v) && v !== 0) { st[fl + mp[k][0]] = v; tot += Math.abs(v); }
+            }
+            if (w > 0 && yyGetBool(ds_map_exists(pm, gp + "games"))) { var gv = rbN(ds_map_find_value(pm, gp + "games")); if (isFinite(gv) && gv > 0) { st[fl + "g"] = gv; } }
+            else if (w === 0 && tot > 0) { st["gl_g"] = 1; }
+        }
+        st.gy = rbGsYr();   // season stats belong to this year
+    } catch (_e) {}
+}
+function rbGsUnpack(st, pm) {
+    try {
+        if (!st) { return; }
+        var mp = rbGsMap(Number(ds_map_find_value(pm, "position"))), old = (st.gy !== undefined && Number(st.gy) !== rbGsYr());   // record from an earlier season: season stats are 0 now
+        for (var w = 0; w < 3; w++) {
+            var fl = RB_GS_PRE[w][0], gp = RB_GS_PRE[w][1], z = (old && w === 1);
+            for (var k = 0; k < mp.length; k++) { ds_map_set(pm, gp + mp[k][1], z ? 0 : (Number(st[fl + mp[k][0]]) || 0)); }
+            if (w > 0) { ds_map_set(pm, gp + "games", z ? 0 : (Number(st[fl + "g"]) || 0)); }
+            for (var q = 0; q < RB_GS_KEYS.length; q++) { var fk = fl + RB_GS_KEYS[q]; if (yyGetBool(ds_map_exists(pm, fk))) { ds_map_delete(pm, fk); } }
+        }
+        if (yyGetBool(ds_map_exists(pm, "gy"))) { ds_map_delete(pm, "gy"); }
+    } catch (_e) {}
+}
+// rows of the stats menu for a position, like the user player stats screen: [label, value]
+function rbGsRows(code, s) {
+    var bp = (code === 15) ? 6 : ((code === 16) ? 5 : code), N = function (k) { return Number(s[k]) || 0; };
+    var avg = function (a, b) { return b > 0 ? (a / b).toFixed(1) : "0.0"; }, pct = function (a, b) { return b > 0 ? Math.round(a / b * 100) + "%" : "-"; };
+    var r = [["GAMES", N("g")]];
+    if (bp === 1) { r.push(["COMP / ATT", N("cmp") + " / " + N("att") + " (" + pct(N("cmp"), N("att")) + ")"], ["PASS YARDS", N("yds")], ["PASS TD", N("td")], ["INTERCEPTIONS", N("int")], ["RUSH YARDS", N("ryds")], ["RUSH TD", N("rtd")], ["FUMBLES", N("fum")]); }
+    else if (bp === 2) { r.push(["RUSH ATT", N("ratt")], ["RUSH YARDS", N("ryds")], ["YARDS / CARRY", avg(N("ryds"), N("ratt"))], ["RUSH TD", N("rtd")], ["RECEPTIONS", N("rec")], ["REC YARDS", N("recy")], ["REC TD", N("rectd")]); }
+    else if (bp === 3 || bp === 4) { r.push(["RECEPTIONS", N("rec")], ["REC YARDS", N("recy")], ["YARDS / REC", avg(N("recy"), N("rec"))], ["REC TD", N("rectd")], ["FUMBLES", N("fum")]); }
+    else if (bp === 10) { r.push(["FG MADE / ATT", N("fgm") + " / " + N("fga")], ["FG %", pct(N("fgm"), N("fga"))], ["XP MADE / ATT", N("xpm") + " / " + N("xpa")]); }
+    else if (bp === 5) { r.push(["NO STATS TRACKED", ""]); }
+    else { r.push(["TACKLES", N("tck")], ["SACKS", N("sck")], ["INTERCEPTIONS", N("dint")], ["FORCED FUMBLES", N("ff")]); }
+    return r;
+}
+var RB_GS_TITLES = ["LAST GAME", "SEASON", "CAREER"];
+// the stats menu, drawn in place of the SKILLS / DEV TRAIT box; the arrows flip between last game, season and career
+function rbFalStatsPanel(_i, _o, x, y, w, h, it) {
+    var v = rbTm.statsV || 0, gs = it.gs, s = rbGsRead(gs, RB_GS_PRE[v][0]);
+    rbFalBox(_i, _o, x, y, w, h, RB_GS_TITLES[v] + " STATS");
+    rbTm.sPrev = { x: x + 4, y: y - 8, w: 30, h: 22 }; rbTm.sNext = { x: x + w - 34, y: y - 8, w: 30, h: 22 };
+    draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215); draw_set_alpha(1);
+    rbFalTxt(_i, _o, x + 12, y + 2, "<", 0); rbFalTxt(_i, _o, x + w - 12 - gml_Script_string_hd_width(_i, _o, ">"), y + 2, ">", 0);
+    var rows = rbGsRows(it.code, s), ry = y + 30, step = Math.min(16, Math.floor((h - 36) / Math.max(1, rows.length)));
+    for (var k = 0; k < rows.length; k++) {
+        rbFalTxt(_i, _o, x + 14, ry + k * step, String(rows[k][0]), w - 28);
+        var vs = String(rows[k][1]);
+        if (vs !== "") { rbFalTxt(_i, _o, x + w - 14 - gml_Script_string_hd_width(_i, _o, vs), ry + k * step, vs, 0); }
+    }
+    draw_set_halign(0); draw_set_valign(1); draw_set_color(16777215);
 }
 // game-style button (obj_button_med_slim look): frame 0 + background-tinted frame 2, pressed = frame 1 shifted; returns the rect so clicks can be hit-tested
 function rbFalBtn(_i,_o,spr,x,y,label,id,maxTw){
@@ -11691,6 +12113,7 @@ function rbTradeApply(_i,_o,tt,tp,mt,mp,tpn,mpn){
         ds_map_set(pm, "position", pn.code); ds_map_set(pm, "fname", pn.fname); ds_map_set(pm, "lname", pn.lname);
         ds_map_set(pm, "skin", pn.skin); ds_map_set(pm, "face_set", pn.face_set); ds_map_set(pm, "face_x", pn.face_x); ds_map_set(pm, "face_y", pn.face_y);
         for (var sk in (pn.st || {})) { ds_map_set(pm, sk, pn.st[sk]); }
+        rbGsUnpack(pn.st, pm);
         ds_map_set(pm, "age", Number(tt[b].age)); ds_map_set(pm, "condition", 100); ds_map_set(pm, "resting", 0);
         ds_map_set(pm, "teamid", g.gmlmyteam_id); ds_map_set(pm, "signed_year", g.gmlyear); ds_map_set(pm, "intrade_pick", 0); ds_map_set(pm, "outtrade_pick", 0);
         try { ds_map_set(pm, "flash_time", g_pBuiltIn.get_current_time()); } catch (_e) {}
@@ -11851,14 +12274,14 @@ function rbTmStep(_i,_o){
     }
     var xid = "";
     if (rbTm.trade) { if (rbTm.tradePage === "player") { if (rbTm.minusBtns) { for (var nk = 0; nk < rbTm.minusBtns.length; nk++) { if (inR(rbTm.minusBtns[nk])) { xid = "rm" + nk; } } } if (rbTm.pickMinus) { for (var pk = 0; pk < rbTm.pickMinus.length; pk++) { if (inR(rbTm.pickMinus[pk])) { xid = "rp" + pk; } } } if (rbTm.pickBtns) { for (var pb = 0; pb < rbTm.pickBtns.length; pb++) { if (inR(rbTm.pickBtns[pb])) { xid = rbTm.pickBtns[pb].xid; } } } if (rbTm.plusBtn && inR(rbTm.plusBtn)) { xid = "plus"; } if (rbTm.offerBtn && inR(rbTm.offerBtn)) { xid = "offer"; } if (rbTm.tMinus) { for (var tx = 0; tx < rbTm.tMinus.length; tx++) { if (inR(rbTm.tMinus[tx])) { xid = "tx" + tx; } } } if (rbTm.tPickMinus) { for (var ty = 0; ty < rbTm.tPickMinus.length; ty++) { if (inR(rbTm.tPickMinus[ty])) { xid = "ty" + ty; } } } if (rbTm.tPlusBtn && inR(rbTm.tPlusBtn)) { xid = "tplus"; } } else if (rbTm.tradePage === "myroster") { if (rbTm.pickBtns) { for (var pc = 0; pc < rbTm.pickBtns.length; pc++) { if (inR(rbTm.pickBtns[pc])) { xid = rbTm.pickBtns[pc].xid; } } } if (rbTm.mRects) { for (var mk = 0; mk < rbTm.mRects.length; mk++) { if (inR(rbTm.mRects[mk])) { xid = "m" + rbTm.mRects[mk].i; } } } } else if (rbTm.tradePage === "theirroster") { if (rbTm.tPickBtns) { for (var tb = 0; tb < rbTm.tPickBtns.length; tb++) { if (inR(rbTm.tPickBtns[tb])) { xid = rbTm.tPickBtns[tb].xid; } } } if (rbTm.tRects) { for (var tc = 0; tc < rbTm.tRects.length; tc++) { if (inR(rbTm.tRects[tc])) { xid = "tc" + rbTm.tRects[tc].i; } } } } else if (rbTm.tPlayer && inR(rbTm.tPlayer)) { xid = "tplayer"; } else if (rbTm.tPick && inR(rbTm.tPick)) { xid = "tpick"; } }
-    else if (rbTm.sel >= 0 && rbTm.tradeBtn && inR(rbTm.tradeBtn)) { xid = "trade"; }
+    else if (rbTm.sel >= 0) { if (rbTm.tradeBtn && inR(rbTm.tradeBtn)) { xid = "trade"; } else if (rbTm.statsBtn && inR(rbTm.statsBtn)) { xid = "stats"; } else if (rbTm.statsOn && rbTm.sPrev && inR(rbTm.sPrev)) { xid = "sprev"; } else if (rbTm.statsOn && rbTm.sNext && inR(rbTm.sNext)) { xid = "snext"; } }
     var pav = "";
     if (rbTm.sel >= 0 && !rbTm.trade && rbTm.list && rbTm.list.length > 1) { var arp = rbTmArrows(o); if (inR(arp.l)) { pav = "pprev"; } else if (inR(arp.r)) { pav = "pnext"; } }
     if (yyGetBool(mouse_check_button_pressed(1))) { rbTm.downId = over ? "back" : (xid !== "" ? xid : (aw !== "" ? aw : (pav !== "" ? pav : (hit >= 0 ? ("card" + hit) : "")))); }
     if (yyGetBool(mouse_check_button_released(1))) {
         var dn = rbTm.downId; rbTm.downId = "";
         if (over && dn === "back") { rbBjSound(_i,_o); rbDevHide(); if (rbTm.trade) { if (rbTm.tradePage) { rbTm.tradePage = (rbTm.tradePage === "myroster" || rbTm.tradePage === "theirroster") ? "player" : ""; } else { rbTm.trade = false; } } else if (rbTm.sel >= 0) { rbTm.sel = -1; rbTm.prof = null; } else { rbTmClose(); } return; }
-        if (xid !== "" && dn === xid) { rbBjSound(_i,_o); if (xid === "trade" && rbTradeClosed(_i,_o)) { rbTm.msg = { lines: ["TRADE DEADLINE", "HAS PASSED"] }; } else if (xid === "trade") { rbTm.trade = true; rbTm.tradePage = ""; rbTm.theirTrade = (rbTm.prof && rbTm.prof.it) ? [rbTm.prof.it] : []; rbTm.theirPicks = []; rbTm.theirPickNum = []; rbTm.myPickNum = []; } else if (xid === "tplayer") { rbTm.tradePage = "player"; } else if (xid === "offer") { rbTradeOffer(_i, _o); } else if (xid === "tplus") { rbTm.tList = (rbTm.list || []).filter(function (z) { return (rbTm.theirTrade || []).indexOf(z) < 0; }); rbTm.tradePage = "theirroster"; } else if (xid.indexOf("tx") === 0) { rbTm.theirTrade.splice(Number(xid.substring(2)), 1); } else if (xid.indexOf("ty") === 0) { rbPkDel(false, Number(xid.substring(2))); } else if (xid.indexOf("tk") === 0) { rbPkAdd(false, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("tc") === 0) { var tci = Number(xid.substring(2)), tcp = rbTm.tList ? rbTm.tList[tci] : null; if (tcp && (rbTm.theirTrade || (rbTm.theirTrade = [])).indexOf(tcp) < 0) { rbTm.theirTrade.push(tcp); } rbTm.tradePage = "player"; } else if (xid.indexOf("rp") === 0) { rbPkDel(true, Number(xid.substring(2))); } else if (xid.indexOf("pk") === 0) { rbPkAdd(true, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("rm") === 0) { rbTm.myTrade.splice(Number(xid.substring(2)), 1); } else if (xid.indexOf("rp") === 0) { rbPkDel(true, Number(xid.substring(2))); } else if (xid.indexOf("pk") === 0) { rbPkAdd(true, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("rm") === 0) { rbTm.myTrade.splice(Number(xid.substring(2)), 1); } else if (xid === "plus") { rbTm.myList = rbFalMyList(_i, _o); rbTm.tradePage = "myroster"; } else if (xid.charAt(0) === "m" && xid !== "m") { var mi = Number(xid.substring(1)), mp = rbTm.myList ? rbTm.myList[mi] : null; if (mp && (rbTm.myTrade || (rbTm.myTrade = [])).indexOf(mp) < 0 && rbTm.myTrade.filter(function (z) { return z.m === mp.m; }).length === 0) { rbTm.myTrade.push(mp); } rbTm.tradePage = "player"; } else { rbTm.tradeChoice = xid; } return; }
+        if (xid !== "" && dn === xid) { rbBjSound(_i,_o); if (xid === "stats") { rbTm.statsOn = !rbTm.statsOn; rbTm.statsV = 0; } else if (xid === "sprev") { rbTm.statsV = ((rbTm.statsV || 0) + 2) % 3; } else if (xid === "snext") { rbTm.statsV = ((rbTm.statsV || 0) + 1) % 3; } else if (xid === "trade" && rbTradeClosed(_i,_o)) { rbTm.msg = { lines: ["TRADE DEADLINE", "HAS PASSED"] }; } else if (xid === "trade") { rbTm.trade = true; rbTm.tradePage = ""; rbTm.theirTrade = (rbTm.prof && rbTm.prof.it) ? [rbTm.prof.it] : []; rbTm.theirPicks = []; rbTm.theirPickNum = []; rbTm.myPickNum = []; } else if (xid === "tplayer") { rbTm.tradePage = "player"; } else if (xid === "offer") { rbTradeOffer(_i, _o); } else if (xid === "tplus") { rbTm.tList = (rbTm.list || []).filter(function (z) { return (rbTm.theirTrade || []).indexOf(z) < 0; }); rbTm.tradePage = "theirroster"; } else if (xid.indexOf("tx") === 0) { rbTm.theirTrade.splice(Number(xid.substring(2)), 1); } else if (xid.indexOf("ty") === 0) { rbPkDel(false, Number(xid.substring(2))); } else if (xid.indexOf("tk") === 0) { rbPkAdd(false, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("tc") === 0) { var tci = Number(xid.substring(2)), tcp = rbTm.tList ? rbTm.tList[tci] : null; if (tcp && (rbTm.theirTrade || (rbTm.theirTrade = [])).indexOf(tcp) < 0) { rbTm.theirTrade.push(tcp); } rbTm.tradePage = "player"; } else if (xid.indexOf("rp") === 0) { rbPkDel(true, Number(xid.substring(2))); } else if (xid.indexOf("pk") === 0) { rbPkAdd(true, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("rm") === 0) { rbTm.myTrade.splice(Number(xid.substring(2)), 1); } else if (xid.indexOf("rp") === 0) { rbPkDel(true, Number(xid.substring(2))); } else if (xid.indexOf("pk") === 0) { rbPkAdd(true, xid); rbTm.tradePage = "player"; } else if (xid.indexOf("rm") === 0) { rbTm.myTrade.splice(Number(xid.substring(2)), 1); } else if (xid === "plus") { rbTm.myList = rbFalMyList(_i, _o); rbTm.tradePage = "myroster"; } else if (xid.charAt(0) === "m" && xid !== "m") { var mi = Number(xid.substring(1)), mp = rbTm.myList ? rbTm.myList[mi] : null; if (mp && (rbTm.myTrade || (rbTm.myTrade = [])).indexOf(mp) < 0 && rbTm.myTrade.filter(function (z) { return z.m === mp.m; }).length === 0) { rbTm.myTrade.push(mp); } rbTm.tradePage = "player"; } else { rbTm.tradeChoice = xid; } return; }
         if (pav !== "" && dn === pav) { rbBjSound(_i,_o); rbTmNavProfile(_i, _o, pav === "pnext" ? 1 : -1); return; }
         if (aw !== "" && dn === aw) { rbBjSound(_i,_o); rbTm.ti = (rbTm.ti + (aw === "next" ? 1 : RB_TEAMS.length - 1)) % RB_TEAMS.length; rbTmLoad(_i,_o); return; }
         if (hit >= 0 && dn === ("card" + hit)) { rbBjSound(_i,_o); try { rbFalSelect(_i,_o,hit); } catch (_e) { try { console.error("profile error", _e); } catch (_x) {} rbTm.sel = -1; rbTm.prof = null; } return; }
@@ -12700,6 +13123,128 @@ function rbConCC(){
     try { w = sprite_get_width(126); h = sprite_get_height(126); } catch (_e) {}
     return { x: o.x + 84, y: o.y + 44, w: w, h: h };
 }
+function rbConSG(){ var c = rbConCC(); return { x: c.x, y: c.y + c.h + 12, w: c.w, h: c.h }; }
+// J. STEGALL: edit these to change the player. skin 2 = light, 1 = medium, 0 = dark; faceX 0-7, faceY 0-2 (light) / 0 (medium) / 0-7 (dark)
+var RB_SG = { fname: "James", lname: "Stegall", pos: 4, age: 21, salary: 1, contract: 15, dev: 3, skin: 2, faceSet: 0, faceX: 1, faceY: 0 };
+var RB_SG_ACCEL = 0.7;         // free-running accel. top speed = ~15.7x this. normal players are about 0.065 - 0.12
+var RB_SG_TOPSPEED = 10;       // max px/frame while running / blocking / chasing a carrier (normal players top out ~1-2). the old value let him hit ~60 px/frame, which skipped right past the ball and every tackle
+var RB_SG_CHASESPEED = 45;     // max px/frame while homing in on a thrown ball
+function rbSgIs(_inst) {       // true only for J. Stegall
+    try {
+        var pm = _inst.gmlpmap;
+        if (pm === undefined || pm === null || pm < 0 || !yyGetBool(ds_exists(pm, 1))) { return false; }
+        return ds_map_find_value(pm, "lname") === RB_SG.lname && ds_map_find_value(pm, "fname") === RB_SG.fname;
+    } catch (_e) { return false; }
+}
+function rbSgHasBall(_ballId) {   // true while J. Stegall is carrying the ball (camera uses this to keep up with his speed)
+    try {
+        var b = yyInst(_ballId, _ballId, _ballId), h = Number(b.gmlholder);
+        if (!(h > 0)) { return false; }
+        return rbSgIs(yyInst(b, b, h));
+    } catch (_e) { return false; }
+}
+function rbSgBallLerp(_b) {   // ball-to-holder follow speed: normally eases in (0.2), but snaps straight onto J. Stegall so it can keep up with him
+    return rbSgHasBall(_b.id) ? 1 : 0.2;
+}
+function rbSgGo(_inst, tx, ty, cap) {   // set his velocity so he lands exactly on (tx,ty) next frame (no overshoot), never faster than cap px/frame
+    var dx = tx - _inst.x, dy = ty - _inst.y, d = Math.sqrt(dx * dx + dy * dy);
+    if (d < 0.01) { _inst.hspeed = 0; _inst.vspeed = 0; return; }
+    var step = Math.min(cap, d / 0.94);  // the player step multiplies speed by 0.94 after this runs
+    _inst.hspeed = dx / d * step; _inst.vspeed = dy / d * step;
+}
+function rbSgBoost(_inst, _other) {   // runs every frame in the player end-step: J. Stegall only
+    try {
+        if (!rbSgIs(_inst)) { return; }
+        _inst.gmlmy_accel = RB_SG_ACCEL;
+        var cont = yyInst(_inst, _other, 104);
+        if (Number(cont.gmlstate) !== 2) { return; }
+        var ball = yyInst(_inst, _other, global.gmlmaster_ball);
+        var st = Number(ball.gmlstate), anim = Number(_inst.gmlanim);
+        var holder = Number(ball.gmlholder), hasHolder = holder > 0;
+        var capSpd = RB_SG_TOPSPEED;
+
+        if (yyGetBool(ball.gmlis_dead)) {                         // play is over: just slow down
+            _inst.hspeed *= 0.7; _inst.vspeed *= 0.7;
+        } else if (yyGetBool(_inst.gmldead) || anim === 4 || anim === 8) {
+            // knocked down / hurdled: let the game handle it
+        } else if (Number(_inst.gmltackling) > 0 && !(hasHolder && holder === Number(_inst.id))) {
+            // locked up with somebody (tackling / blocking): ride along with them so the tackle isn't broken by his speed
+            var o = yyInst(_inst, _other, _inst.gmltackling);
+            _inst.hspeed = o.hspeed + (o.x - _inst.x) * 0.3;
+            _inst.vspeed = o.vspeed + (o.y - _inst.y) * 0.3;
+            _inst.gmljforce = 0;
+            capSpd = RB_SG_TOPSPEED;
+        } else if (st === 3 && !hasHolder && (!yyGetBool(cont.gmlkicking) || (Number(_inst.gmlposition) === 14 && yyGetBool(_inst.gmloffense)))) {
+            // BALL IN THE AIR (any throw, anywhere; kicks too when he is the returner): go straight to it
+            var m = yyInst(_inst, _other, 111);
+            var dr = Number(ball.gmldirec) * Math.PI / 180, vel = Number(ball.gmlvelocity) * 0.986;
+            var tx = Number(ball.x) + Math.cos(dr) * vel, ty = Number(ball.y) + Math.sin(dr) * vel;   // where the ball will be next frame
+            var coming = Number(ball.gmlzvel) < 0 && Number(ball.gmlheight) < 80;                     // on its way down: sit right under it
+            if (!coming && (Number(m.gmlbounce_x) !== 0 || Number(m.gmlbounce_y) !== 0)) { tx = Number(m.gmlbounce_x); ty = Number(m.gmlbounce_y); }   // still climbing: wait at the landing spot
+            tx = Math.max(150, Math.min(2450, tx)); ty = Math.max(140, Math.min(460, ty));
+            rbSgGo(_inst, tx, ty, RB_SG_CHASESPEED);
+            _inst.gmljforce = 0;
+            if (anim === 0 || anim === 1) { gml_Script_s_set_anim(_inst, _other, 2); }
+            return;
+        } else if (hasHolder && holder !== Number(_inst.id) && st !== 6 && st !== 0 && st !== 1 && st !== 2 && !yyGetBool(gml_Script_s_is_kickoff(_inst, _other, true))) {
+            var h = yyInst(_inst, _other, holder);
+            if (yyGetBool(h.gmloffense) !== yyGetBool(_inst.gmloffense) && !yyGetBool(h.gmldead)) {
+                // other team has the ball (pick / fumble recovery): run them down and tackle
+                var dist = Math.sqrt((h.x - _inst.x) * (h.x - _inst.x) + (h.y - _inst.y) * (h.y - _inst.y));
+                var lead = Math.min(dist / RB_SG_TOPSPEED, 8);
+                rbSgGo(_inst, h.x + h.hspeed * lead, h.y + h.vspeed * lead, RB_SG_TOPSPEED);
+                _inst.gmljforce = 0;
+                if (anim === 0 || anim === 1) { gml_Script_s_set_anim(_inst, _other, 2); }
+                return;
+            }
+        }
+
+        var sp = Math.sqrt(_inst.hspeed * _inst.hspeed + _inst.vspeed * _inst.vspeed);   // everything else (routes, blocking, running with the ball): normal AI, but speed-capped
+        if (sp > capSpd) { _inst.hspeed *= capSpd / sp; _inst.vspeed *= capSpd / sp; }
+    } catch (_e) {}
+}
+function rbSgSetReturner(M, pm) {   // same thing the in-game "kick returner" toggle does: only one player on the roster has it
+    for (var i = 0; i < ds_list_size(M.gmlroster); i++) { var o = ds_list_find_value(M.gmlroster, i); try { ds_map_set(o, "kr", 0); } catch (_e) {} }
+    ds_map_set(pm, "kr", 1);
+    try { ds_map_set(M.gmlmap_options, "op_kickoffs", 1); } catch (_e) {}
+}
+function rbConStegallGet(_i,_o){
+    var msg = "";
+    try {
+        var M = yyInst(_i, _o, 97), cap = Number(M.gmlsalary_cap), lim = 10;   // same roster limits the game's own signing check uses
+        if (cap > 150) { lim = 12; } if (cap > 200) { lim = 16; } if (cap > 275) { lim = 20; } if (cap > 350) { lim = 30; }
+        var exPm = -4, found = false;
+        for (var ri = 0; ri < ds_list_size(M.gmlroster); ri++) {   // already on the roster? then just make him the kick returner
+            var rp = ds_list_find_value(M.gmlroster, ri);
+            if (ds_map_find_value(rp, "lname") === RB_SG.lname && ds_map_find_value(rp, "fname") === RB_SG.fname) { exPm = rp; found = true; break; }
+        }
+        if (found) {
+            rbSgSetReturner(M, exPm);
+            try { gml_Script_s_savegame(_i, _o); } catch (_e) {}
+            msg = RB_SG.fname.toUpperCase() + " " + RB_SG.lname.toUpperCase() + " IS YOUR KICK RETURNER";
+        }
+        else if (ds_list_size(M.gmlroster) >= lim) { msg = "ROSTER IS FULL"; }
+        else {
+            var pm = gml_Script_s_create_player(_i, _o, RB_SG.pos, RB_SG.age, 1, 12);   // full player record, then overwrite
+            ds_map_set(pm, "fname", RB_SG.fname); ds_map_set(pm, "lname", RB_SG.lname);
+            ds_map_set(pm, "age", RB_SG.age);
+            var st = ["skill", "speed", "strength", "stamina"];
+            for (var s = 0; s < st.length; s++) { ds_map_set(pm, st[s], 12); ds_map_set(pm, "max_" + st[s], 12); }   // maxed stats and potential = 6 stars / 6 stars
+            ds_map_set(pm, "dev_trait", RB_SG.dev);   // 3 = x factor
+            ds_map_set(pm, "salary", RB_SG.salary); ds_map_set(pm, "contract", RB_SG.contract); ds_map_set(pm, "creditcost", 0);
+            ds_map_set(pm, "attitude", 100); ds_map_set(pm, "condition", 100); ds_map_set(pm, "injury_week", 0);
+            ds_map_set(pm, "xp", 0); ds_map_set(pm, "xp_level", 1); ds_map_set(pm, "xp_gain", 0); ds_map_set(pm, "skill_points", 0);
+            ds_map_set(pm, "skin", RB_SG.skin); ds_map_set(pm, "face_set", RB_SG.faceSet); ds_map_set(pm, "face_x", RB_SG.faceX); ds_map_set(pm, "face_y", RB_SG.faceY);
+            rbSgSetReturner(M, pm); ds_map_set(pm, "teamid", M.gmlmyteam_id); ds_map_set(pm, "signed_year", M.gmlyear); ds_map_set(pm, "flash_time", g_pBuiltIn.get_current_time());
+            ds_list_add(M.gmlroster, pm);
+            try { gml_Script_s_savegame(_i, _o); } catch (_e) {}
+            msg = "ADDED " + RB_SG.fname.toUpperCase() + " " + RB_SG.lname.toUpperCase() + " TO YOUR ROSTER";
+        }
+    } catch (_e) { try { console.error("stegall error", _e); } catch (_x) {} msg = "COULD NOT ADD: " + String((_e && _e.message) || _e).toUpperCase().slice(0, 70); }
+    gml_Script_s_create_message(_i, _o, "", msg, gml_Script_s_str(_i, _o, "ui_Ok"), "", kgml_Script_s_msg_clear, "", global.gmlc_background, 1);
+    rbCon.msgWait = true;
+    global.rbConOpen = false;
+}
 function rbConAddCCs(_i,_o){
     var _v = get_integer("Enter coach credits to add:", "100");
     if (typeof _v !== "number" || !isFinite(_v) || _v <= 0) { return; }
@@ -12722,11 +13267,13 @@ function rbConStep(_i,_o){
     var over = (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
     var c = rbConCC();
     var overCC = (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h);
-    if (yyGetBool(mouse_check_button_pressed(1))) { rbCon.downId = over ? "back" : (overCC ? "cc" : ""); }
+    var sg = rbConSG(), overSG = (mx >= sg.x && mx <= sg.x + sg.w && my >= sg.y && my <= sg.y + sg.h);
+    if (yyGetBool(mouse_check_button_pressed(1))) { rbCon.downId = over ? "back" : (overCC ? "cc" : (overSG ? "sg" : "")); }
     if (yyGetBool(mouse_check_button_released(1))) {
         var dn = rbCon.downId; rbCon.downId = "";
         if (over && dn === "back") { rbBjSound(_i,_o); rbConClose(); return; }
         if (overCC && dn === "cc") { rbBjSound(_i,_o); rbConAddCCs(_i,_o); return; }
+        if (overSG && dn === "sg") { rbBjSound(_i,_o); rbConStegallGet(_i,_o); return; }
     }
     if (yyGetBool(keyboard_check_pressed(27))) { rbBjSound(_i,_o); rbConClose(); }
 }
@@ -12780,6 +13327,21 @@ function rbConDraw(_i,_o){
         rbBjT(tx, ty, "ENTER CCS", 1, 16777215, 1);
         rbBjT(c.x - 3, c.y + Math.floor(c.h / 2) - 6, "COACH", 2, 16777215, 1);
         rbBjT(c.x - 3, c.y + Math.floor(c.h / 2) + 8, "CREDITS", 2, 16777215, 1);
+        // J. STEGALL control, under the coach credits button
+        var sg = rbConSG(), overSGd = (mx >= sg.x && mx <= sg.x + sg.w && my >= sg.y && my <= sg.y + sg.h);
+        var prSG = overSGd && yyGetBool(mouse_check_button(1)) && rbCon.downId === "sg";
+        var sgx = sg.x + Math.floor(sg.w / 2) + 1, sgy = sg.y + Math.floor(sg.h / 2) - 1;
+        draw_set_font(global.gmlfnt_small_flex); draw_set_valign(1);
+        if (!prSG) {
+            draw_sprite(_i, 126, 0, sg.x, sg.y);
+            draw_sprite_ext(_i, 126, 2, sg.x, sg.y, 1, 1, 0, global.gmlc_background, 1);
+        } else {
+            draw_sprite(_i, 126, 1, sg.x, sg.y);
+            draw_sprite_ext(_i, 126, 2, sg.x - 2, sg.y + 2, 1, 1, 0, global.gmlc_background, 1);
+            sgx -= 2; sgy += 2;
+        }
+        rbBjT(sgx, sgy, "GET", 1, 16777215, 1);
+        rbBjT(sg.x - 3, sg.y + Math.floor(sg.h / 2), "J. STEGALL", 2, 16777215, 1);
         draw_set_halign(0); draw_set_color(16777215); draw_set_alpha(1);
     } catch (_e) {
         try { console.error("console draw error", _e); } catch (_x) {}
@@ -12805,7 +13367,7 @@ function rbBjTotal(h) {
     return t;
 }
 function rbBjIsBJ(h) { return h.length === 2 && rbBjTotal(h) === 21; }
-function rbBjBlocking() { return global.rbBjOpen === true || global.rbConOpen === true || global.rbLogOpen === true || global.rbTmOpen === true || global.rbPrOpen === true || global.rbCdOpen === true || global.rbDlOrderOpen === true || global.rbBjCool > 0; }
+function rbBjBlocking() { return global.rbBjOpen === true || global.rbConOpen === true || global.rbLogOpen === true || global.rbSlOpen === true || global.rbTmOpen === true || global.rbPrOpen === true || global.rbCdOpen === true || global.rbDlOrderOpen === true || global.rbBjCool > 0; }
 function rbBjCredits(_i, _o) { var n = Number(yyInst(_i, _o, 97).gmlcoach_credit); return isFinite(n) ? n : 0; }
 function rbBjGive(_i, _o, n) { yyInst(_i, _o, 97).gmlcoach_credit = Math.min(2000000000, Math.max(0, rbBjCredits(_i, _o) + n)); }
 function rbBjSound(_i, _o) { try { if (yyGetBool(ds_map_find_value(yyInst(_i, _o, 97).gmlmap_options, "op_soundfx"))) { audio_play_sound(5, 1, false); } } catch (_e) {} }
@@ -12967,7 +13529,7 @@ function rbBjStep(_i, _o) {
 function rbBjTick(_i, _o) {
     try { rbKbTick(); } catch (_e) {}
     try { rbDlTick(_i, _o); } catch (_e) { try { console.error("live draft error", _e); } catch (_x) {} rbDl = null; }    if (global.rbBjCool > 0) { global.rbBjCool--; }
-    if (rbCd) {
+    if (rbCd && rbCd.mode !== "sim") {
         rbCd.frames = (rbCd.frames || 0) + 1;
         var rbSkip = false; try { rbSkip = rbCd.frames > 240 && (yyGetBool(mouse_check_button_pressed(1)) || yyGetBool(keyboard_check_pressed(13)) || yyGetBool(keyboard_check_pressed(32))); } catch (_e) {}
         if (rbSkip || rbCd.frames > 2400) {   // stuck for ~40 s, or you tapped / pressed Enter after 4 s: leave the draft screen
@@ -12977,6 +13539,7 @@ function rbBjTick(_i, _o) {
     }
     if (rbCd) { try { rbCdStep(_i, _o); } catch (_e) { try { console.error("cpu draft error", _e); } catch (_x) {} try { if (rbCd) { rbCd.err = String(_e && _e.message ? _e.message : _e); } } catch (_x) {} try { alert("CPU draft failed (stage " + (rbCd ? rbCd.stage : "?") + ", team " + (rbCd ? rbCd.k : "?") + "):\n" + (_e && _e.stack ? String(_e.stack).split("\n").slice(0, 4).join("\n") : String(_e))); } catch (_x) {} rbCdFinish(_i, _o); } return; }
     if (rbCd && (rbCd.mode === "order" || rbCd.mode === "class")) { return; }   // the loading page is up: the screen under it must not react
+    if (rbSl) { try { rbSlStep(_i, _o); } catch (_e) { try { console.error("stat leaders error", _e); } catch (_x) {} rbSlClose(); } return; }
     if (rbTm) { try { rbTmStep(_i, _o); } catch (_e) { try { console.error("teams error", _e); } catch (_x) {} rbTmClose(); } return; }
     if (rbPr) { try { rbPrStep(_i, _o); } catch (_e) { try { console.error("prospects error", _e); } catch (_x) {} rbPrClose(); } return; }
     if (rbLog) { try { rbLogStep(_i, _o); } catch (_e) { try { console.error("login error", _e); } catch (_x) {} rbLogClose(); } return; }
@@ -13483,7 +14046,7 @@ function rbDlDraw(_i, _o) {
     try {
         if (g_pBuiltIn.get_current_room() !== 5) { return; }
         if (yyGetBool(instance_exists(104))) { return; }
-        if ((global.rbBjOpen === true || global.rbConOpen === true || global.rbLogOpen === true || global.rbTmOpen === true || global.rbPrOpen === true || global.rbCdOpen === true) && global.rbDlOrderOpen !== true) { return; }   // Teams page etc. is on top
+        if ((global.rbBjOpen === true || global.rbConOpen === true || global.rbLogOpen === true || global.rbSlOpen === true || global.rbTmOpen === true || global.rbPrOpen === true || global.rbCdOpen === true) && global.rbDlOrderOpen !== true) { return; }   // Teams page etc. is on top
         var g = yyInst(_i, _o, 97), W = 16777215, bg = global.gmlc_background, prim = global.gmlc_primary;
         var order = rbDl.order || [], slot = order[rbDl.idx], me = !!(slot && slot.me), ti = slot ? slot.ti : -1;
         var PX = 4, PY = 26, PW = 126, PH = 196, cx = PX + PW / 2, i;
@@ -13761,7 +14324,7 @@ function rbBjDraw(_i, _o) {
     }
 }
 function gml_Object_obj_master_Draw_75(_inst, _other) {
-    var fns = [rbGameLogRoom, rbBjDraw, rbConDraw, rbLogDraw, rbTmDraw, rbPrDraw, rbDlDraw, rbCdDraw];    for (var fi = 0; fi < fns.length; fi++) { try { fns[fi](_inst, _other); } catch (_e) { try { console.error("draw error", fns[fi].name, _e); } catch (_x) {} } }
+    var fns = [rbGameLogRoom, rbBjDraw, rbConDraw, rbLogDraw, rbSlDraw, rbTmDraw, rbPrDraw, rbDlDraw, rbCdDraw];    for (var fi = 0; fi < fns.length; fi++) { try { fns[fi](_inst, _other); } catch (_e) { try { console.error("draw error", fns[fi].name, _e); } catch (_x) {} } }
 }
 function gml_RoomCC_rm_options_0_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,"ui_Options");}function gml_RoomCC_rm_options_1_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_Options_Exit;_inst.gmlimage=159;_inst.gmlgp_mapped_hidden=global.gmlgp_back;}function gml_RoomCC_rm_options_2_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsDriveLeft;}function gml_RoomCC_rm_options_3_PreCreate(_inst,_other){_inst.gmldraw_box=false;
 _inst.gmlhalign=2;_inst.gmlfont=global.gmlfnt_small_flex;}function gml_RoomCC_rm_options_4_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsWeather;}function gml_RoomCC_rm_options_6_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsSoundFX;}function gml_RoomCC_rm_options_7_PreCreate(_inst,_other){_inst.gmlonClickAction=kgml_Script_btn_click_OptionsZoom;}function gml_RoomCC_rm_options_8_PreCreate(_inst,_other){_inst.gmltext=gml_Script_s_str(_inst,_inst,

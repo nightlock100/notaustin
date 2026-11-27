@@ -15,7 +15,7 @@
 13	Colts	IND	$0667c1
 14	Jaguars	JAC	$018da2
 15	Tennessee	TEN	$418fde
-16	Cowboys	DAL	$87909a
+16	Cowboys	DAL	$0E4078
 17	Giants	NYG	$073dbb
 18	Eagles	PHI	$4cbb17
 19	Redskins	WAS	$651c32
@@ -30,4 +30,4 @@
 28	Falcons	ATL	$a6192e
 29	Carolina	CAR	$0085CA
 30	Saints	N.O	$a28d58
-31	Tampa Bay	T.B	$ff9933
+31	Bucaneers	T.B	$ff9933
